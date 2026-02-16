@@ -1,0 +1,1 @@
+# MedGemma Trauma Analysis\n\nAI-powered hemorrhage detection and quantification from CT scans using MedGemma.\n\n## Project Structure\n- Data: RSNA Abdominal Trauma Dataset\n- Model: MedGemma for report generation\n- Features: Segmentation, quantification, risk scoring
