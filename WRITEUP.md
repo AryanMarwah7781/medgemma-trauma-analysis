@@ -1,131 +1,72 @@
 # MedGemma Hemorrhage Quantifier
 
-## 1. Problem Domain
+## Project Name
+**MedGemma Hemorrhage Quantifier** — AI-Powered CT Scan Analysis for Trauma Care
 
-### The Clinical Need
-Trauma patients with internal bleeding require rapid, objective assessment in the emergency department. When patients arrive with suspected abdominal trauma, radiologists must:
-- Locate areas of active bleeding (extravasation)
-- Quantify the volume of blood loss
-- Determine if emergency intervention is needed
+---
 
-Current challenges:
-- Manual CT interpretation is time-consuming and subjective
+## Your Team
+- **Aryan Marwah** — Developer & Researcher
+
+---
+
+## Problem Statement
+
+Trauma patients with internal abdominal bleeding require immediate medical attention. Currently, radiologists manually review CT angiogram scans to:
+- Detect active bleeding (extravasation)
+- Estimate blood loss volume
+- Determine if surgery is needed
+
+**Challenges:**
+- Manual interpretation is slow and subjective
 - Quantifying hemorrhage volume is imprecise
-- Delayed diagnosis can be fatal in severe cases
+- Delayed diagnosis can be fatal
 
-### Our Solution
-An AI-powered system that:
-- Automatically analyzes CT angiogram scans
-- Detects and segments active bleeding regions
-- Calculates precise hemorrhage volume in milliliters
-- Generates structured radiology reports with treatment recommendations
-
----
-
-## 2. Effective Use of HAI-DEF Models
-
-### MedGemma Integration
-We leverage Google's MedGemma model (via Ollama) for natural language report generation:
-- Input: Segmented CT analysis results (volume, risk level)
-- Output: Professional radiology reports with clinical impressions
-
-The LLM provides:
-- Structured medical documentation
-- Clinically accurate recommendations
-- Professional radiology language
-
-### Technical Architecture
-```
-CT Scan Image
-      ↓
-Preprocessing (normalization, windowing)
-      ↓
-U-Net Segmentation (ResNet34 encoder, ImageNet pretrained)
-      ↓
-Volume Quantification (voxel count → mL)
-      ↓
-Risk Assessment (LOW/MODERATE/HIGH)
-      ↓
-MedGemma LLM Report Generation
-      ↓
-Structured Medical Report
-```
+**Impact:** Our solution enables:
+- Automated hemorrhage detection in seconds
+- Precise volume quantification (in mL)
+- Real-time decision support for emergency physicians
+- Accessible on edge devices (Jetson Orin Nano)
 
 ---
 
-## 3. Product Feasibility
+## Overall Solution
 
-### Technical Implementation
-- **Segmentation**: U-Net with ResNet34 encoder (pre-trained on ImageNet)
-- **LLM**: MedGemma 4B (instruction-tuned) running locally via Ollama
-- **Frontend**: Flask web application
-- **Deployment**: Runs locally on Jetson Orin Nano (ARM64)
+We built an AI-powered hemorrhage detection system using **Google's MedGemma** model:
 
-### Performance
-- Real-time inference on edge device
-- No cloud dependency (privacy-preserving)
+1. **CT scan upload** → Web interface accepts any CT image
+2. **Segmentation** → U-Net with ResNet34 encoder detects bleeding regions
+3. **Quantification** → Converts pixels to exact milliliter volume
+4. **Risk Assessment** → Classifies as LOW/MODERATE/HIGH risk
+5. **MedGemma Report** → LLM generates professional radiology reports with recommendations
+
+**Key Feature:** The system uses MedGemma (via Ollama) to generate natural language medical reports, fulfilling the HAI-DEF model requirement.
+
+---
+
+## Technical Details
+
+### Architecture
+```
+CT Image → U-Net Segmentation → Volume Calc → Risk Assessment → MedGemma LLM → Report
+```
+
+### Tech Stack
+- **Segmentation**: PyTorch + segmentation-models-pytorch (U-Net, ResNet34 encoder)
+- **LLM**: MedGemma 4B (amsaravi/medgemma-4b-it) via Ollama
+- **Frontend**: Flask web app (Python)
+- **Deployment**: Jetson Orin Nano (ARM64, edge-capable)
+
+### Code & Resources
+- **Repository**: https://github.com/AryanMarwah7781/medgemma-trauma-analysis
+- **Dataset**: RSNA Abdominal Trauma Detection (Kaggle)
+- **Live Demo**: Running on Jetson (Flask app)
+
+### Key Features
+- Runs locally (privacy-preserving, no cloud needed)
 - Works offline after model download
-
-### Code Availability
-All code is open-source and reproducible:
-- Dataset: RSNA Abdominal Trauma Detection (Kaggle)
-- Models: segmentation-models-pytorch + Ollama
-- Web app: Flask + vanilla JavaScript
-
----
-
-## 4. Impact Potential
-
-### Clinical Benefits
-- **Faster triage**: Automated analysis in seconds vs. minutes
-- **Objective quantification**: Precise volume measurements
-- **Decision support**: AI-generated recommendations assist clinicians
-- **Access**: Can run on edge devices in resource-limited settings
-
-### Real-World Applications
-- Emergency departments
-- Trauma centers
-- Ambulances/EMS
-- Developing countries with limited radiology resources
-
----
-
-## 5. Execution & Communication
-
-### Demo Video Contents
-1. Introduction to the problem (30 sec)
-2. System demonstration (90 sec)
-3. Technical overview (30 sec)
-4. Conclusion (30 sec)
-
-### Code Organization
-```
-medgemma-trauma-analysis/
-├── app.py                    # Flask web application
-├── src/
-│   ├── data_loader.py       # CT data loading
-│   ├── unet_model.py         # Segmentation model
-│   ├── quantification.py     # Volume calculation
-│   └── medgemma_report.py   # LLM report generation
-├── templates/
-│   └── index.html           # Web UI
-└── requirements.txt          # Dependencies
-```
-
-### Reproducibility
-All dependencies are documented. Run with:
-```bash
-pip install -r requirements.txt
-python app.py
-```
-
----
-
-## 6. Future Work
-- Fine-tune segmentation model on medical data
-- Multi-organ injury detection
-- Integration with PACS systems
-- Mobile app development
+- Real-time inference on edge devices
+- Professional medical report generation
 
 ---
 
