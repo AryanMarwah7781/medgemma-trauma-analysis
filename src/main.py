@@ -111,7 +111,7 @@ def main():
             # Get injury severity (demo)
             injury = {
                 'total_score': 0,
-                'overall_class': 'LOW',
+                'overall_classification': 'LOW',
                 'injured_organs': []
             }
             

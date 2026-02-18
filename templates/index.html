@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedGemma Hemorrhage Quantifier</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #00d4ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #8892b0;
+            font-size: 1.1rem;
+        }
+        
+        .upload-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            border: 2px dashed rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .upload-section:hover {
+            border-color: #00d4ff;
+            background: rgba(255, 255, 255, 0.08);
+        }
+        
+        .upload-btn {
+            background: linear-gradient(90deg, #00d4ff, #7b2ff7);
+            color: white;
+            padding: 15px 40px;
+            border-radius: 30px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.2s;
+        }
+        
+        .upload-btn:hover {
+            transform: scale(1.05);
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        .upload-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .results {
+            display: none;
+            margin-top: 40px;
+        }
+        
+        .results-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 30px;
+        }
+        
+        .result-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 25px;
+        }
+        
+        .result-card h3 {
+            color: #00d4ff;
+            margin-bottom: 15px;
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .stat:last-child {
+            border-bottom: none;
+        }
+        
+        .stat-value {
+            font-weight: 600;
+            font-size: 1.2rem;
+        }
+        
+        .risk-low { color: #00ff88; }
+        .risk-moderate { color: #ffaa00; }
+        .risk-high { color: #ff4444; }
+        
+        .report-box {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            text-align: left;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            grid-column: 1 / -1;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 60px;
+            color: #555;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏥 MedGemma</h1>
+            <p class="subtitle">AI-Powered Hemorrhage Detection from CT Scans</p>
+        </header>
+        
+        <div class="upload-section" id="uploadSection">
+            <div class="upload-icon">📤</div>
+            <h2>Upload CT Scan</h2>
+            <p style="color: #8892b0; margin-top: 10px;">
+                Drag & drop or click to select a CT angiogram image
+            </p>
+            <label class="upload-btn">
+                Choose File
+                <input type="file" id="fileInput" accept="image/*">
+            </label>
+        </div>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Analyzing CT Scan...</p>
+        </div>
+        
+        <div class="results" id="results">
+            <h2 style="text-align: center;">Analysis Results</h2>
+            
+            <div class="results-grid">
+                <div class="result-card">
+                    <h3>Hemorrhage Detection</h3>
+                    <div class="stat">
+                        <span>Volume</span>
+                        <span class="stat-value" id="volume">--</span>
+                    </div>
+                    <div class="stat">
+                        <span>Risk Level</span>
+                        <span class="stat-value" id="risk">--</span>
+                    </div>
+                    <div class="stat">
+                        <span>Detected Pixels</span>
+                        <span class="stat-value" id="pixels">--</span>
+                    </div>
+                </div>
+                
+                <div class="result-card">
+                    <h3>Recommendation</h3>
+                    <p id="recommendation" style="font-size: 1.1rem; line-height: 1.6;">
+                        --
+                    </p>
+                </div>
+                
+                <div class="result-card" style="grid-column: 1 / -1;">
+                    <h3>MedGemma AI Report</h3>
+                    <div class="report-box" id="llmReport">
+                        --
+                    </div>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 30px;">
+                <button class="upload-btn" onclick="resetApp()">Analyze Another Scan</button>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>MedGemma Hemorrhage Quantifier | Google HAI-DEF Hackathon 2026</p>
+        </div>
+    </div>
+    
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const uploadSection = document.getElementById('uploadSection');
+        const loading = document.getElementById('loading');
+        const results = document.getElementById('results');
+        
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            // Show loading
+            uploadSection.style.display = 'none';
+            loading.style.display = 'block';
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResults(data.result, data.report);
+                } else {
+                    alert('Error: ' + data.error);
+                    resetApp();
+                }
+            } catch (error) {
+                alert('Error processing image');
+                resetApp();
+            }
+        });
+        
+        function showResults(result, report) {
+            loading.style.display = 'none';
+            results.style.display = 'block';
+            
+            // Update values
+            document.getElementById('volume').textContent = result.volume_ml + ' mL';
+            document.getElementById('pixels').textContent = result.num_voxels.toLocaleString();
+            
+            const riskEl = document.getElementById('risk');
+            riskEl.textContent = result.risk_level;
+            riskEl.className = 'stat-value risk-' + result.risk_level.toLowerCase();
+            
+            document.getElementById('recommendation').textContent = result.recommendation;
+            document.getElementById('llmReport').textContent = result.llm_report || result.report;
+        }
+        
+        function resetApp() {
+            fileInput.value = '';
+            uploadSection.style.display = 'block';
+            loading.style.display = 'none';
+            results.style.display = 'none';
+        }
+        
+        // Drag and drop
+        uploadSection.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadSection.style.borderColor = '#00d4ff';
+        });
+        
+        uploadSection.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            uploadSection.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+        });
+        
+        uploadSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadSection.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                fileInput.dispatchEvent(new Event('change'));
+            }
+        });
+    </script>
+</body>
+</html>
