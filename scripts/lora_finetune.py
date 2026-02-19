@@ -101,8 +101,18 @@ def load_nifti_as_pil(
         PIL Image in RGB mode, ready for MedGemma.
     """
     import nibabel as nib
+    import tempfile
 
-    vol = nib.load(path).get_fdata()  # float64, shape varies
+    # nibabel identifies format from file extension. HuggingFace cache files
+    # have no extension (they're hash-named). Create a temp symlink ending in
+    # .nii.gz so nibabel recognises the gzip-compressed NIfTI format.
+    if not path.endswith((".nii", ".nii.gz")):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = os.path.join(tmpdir, "ct.nii.gz")
+            os.symlink(os.path.abspath(path), tmp)
+            vol = nib.load(tmp).get_fdata()
+    else:
+        vol = nib.load(path).get_fdata()  # float64, shape varies
 
     # Collapse any trailing dimensions (e.g., 4D time series)
     while vol.ndim > 3:
