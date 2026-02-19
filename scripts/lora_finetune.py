@@ -28,6 +28,8 @@ Usage:
 """
 
 import argparse
+import gzip
+import io
 import json
 import os
 from pathlib import Path
@@ -100,21 +102,28 @@ def build_training_examples(dataset_split, processor, max_samples: int = None):
             if not img_path:
                 continue
 
-            # Load CT image — HF cache stores DICOM files without extension,
-            # so try PIL first (works for PNG/JPEG), fall back to pydicom.
+            # Load CT image.
+            # HF cache stores gzip-compressed DICOM files without extension.
+            # Try in order: plain PIL → gzip+DICOM → plain DICOM.
+            ct_image = None
             try:
                 ct_image = Image.open(img_path).convert("RGB")
             except Exception:
+                pass
+
+            if ct_image is None:
                 import pydicom
-                dcm = pydicom.dcmread(img_path)
+                try:
+                    with gzip.open(img_path, "rb") as f:
+                        raw = f.read()
+                    dcm = pydicom.dcmread(io.BytesIO(raw))
+                except Exception:
+                    dcm = pydicom.dcmread(img_path)
+
                 arr = dcm.pixel_array.astype(np.float32)
-                # Window/level normalize to 0-255
                 arr = (arr - arr.min()) / (arr.max() - arr.min() + 1e-8)
                 arr = (arr * 255).astype(np.uint8)
-                if arr.ndim == 2:
-                    ct_image = Image.fromarray(arr, mode="L").convert("RGB")
-                else:
-                    ct_image = Image.fromarray(arr).convert("RGB")
+                ct_image = Image.fromarray(arr if arr.ndim == 3 else arr, mode=None if arr.ndim == 3 else "L").convert("RGB")
 
             # Read classification labels
             extravasation = int(item.get("extravasation", 0))  # 0=healthy,1=injury
