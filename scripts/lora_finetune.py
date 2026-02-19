@@ -232,7 +232,7 @@ def train(args):
 
     # --- Load dataset ---
     print(f"\n[1/4] Loading dataset: {DATASET_ID}")
-    dataset = load_dataset(DATASET_ID, split="train", token=hf_token)
+    dataset = load_dataset(DATASET_ID, split="train", token=hf_token, trust_remote_code=True)
     print(f"      Total examples available: {len(dataset)}")
 
     # --- Load model with 4-bit quantization ---
