@@ -51,6 +51,7 @@ class MedGemmaVisualAnalyzer:
         device: str = "auto",
         use_4bit: bool = True,
         hf_token: str = None,
+        lora_adapter: str = None,
     ):
         """
         Args:
@@ -59,6 +60,9 @@ class MedGemmaVisualAnalyzer:
             use_4bit: 4-bit BitsAndBytes quantization. Reduces VRAM from ~8GB to ~4GB.
                       Automatically disabled if CUDA is unavailable.
             hf_token: HuggingFace token. Falls back to HF_TOKEN env var.
+            lora_adapter: Path to a PEFT LoRA adapter directory (optional).
+                          If provided, the fine-tuned weights are loaded on top of
+                          the base model for RSNA-specialized inference.
         """
         token = hf_token or os.environ.get("HF_TOKEN")
         cuda_available = torch.cuda.is_available()
@@ -84,6 +88,17 @@ class MedGemmaVisualAnalyzer:
             token=token,
         )
         self.processor = AutoProcessor.from_pretrained(self.MODEL_ID, token=token)
+
+        # Optionally load fine-tuned LoRA adapter (RSNA trauma-specialist weights)
+        self.lora_adapter = lora_adapter
+        if lora_adapter:
+            try:
+                from peft import PeftModel
+                self.model = PeftModel.from_pretrained(self.model, lora_adapter)
+                print(f"[MedGemmaVisualAnalyzer] LoRA adapter loaded from: {lora_adapter}")
+            except Exception as e:
+                print(f"[MedGemmaVisualAnalyzer] WARNING: Failed to load LoRA adapter: {e}")
+
         self.model.eval()
 
         # Track the actual device for input tensors

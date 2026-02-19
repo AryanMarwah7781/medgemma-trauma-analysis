@@ -62,12 +62,16 @@ def load_models():
     """Initialize all models. Called once before serving requests."""
     global orchestrator
     cuda = torch.cuda.is_available()
+    lora_adapter = os.environ.get("LORA_ADAPTER") or None
     print(f"[app.py] CUDA available: {cuda}")
+    if lora_adapter:
+        print(f"[app.py] LoRA adapter: {lora_adapter}")
     orchestrator = TraumaOrchestrator(
         device="auto" if cuda else "cpu",
         use_4bit=cuda,
         triage_threshold=float(os.environ.get("TRIAGE_THRESHOLD", "0.25")),
         hf_token=os.environ.get("HF_TOKEN"),
+        lora_adapter=lora_adapter,
     )
 
 

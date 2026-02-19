@@ -50,6 +50,7 @@ class TraumaOrchestrator:
         use_4bit: bool = True,
         triage_threshold: float = 0.25,
         hf_token: str = None,
+        lora_adapter: str = None,
     ):
         """
         Load all models. Called once at Flask startup.
@@ -59,6 +60,8 @@ class TraumaOrchestrator:
             use_4bit: 4-bit quantization for MedGemma (requires CUDA).
             triage_threshold: MedSigLIP suspicion cutoff [0, 1].
             hf_token: HuggingFace token. Falls back to HF_TOKEN env var.
+            lora_adapter: Path to PEFT LoRA adapter directory. If set, MedGemma
+                          uses the fine-tuned RSNA trauma-specialist weights.
         """
         token = hf_token or os.environ.get("HF_TOKEN")
         cuda_available = torch.cuda.is_available()
@@ -79,6 +82,7 @@ class TraumaOrchestrator:
             device=device if cuda_available else "cpu",
             use_4bit=use_4bit and cuda_available,
             hf_token=token,
+            lora_adapter=lora_adapter,
         )
 
         # Layer 3: U-Net segmentation (keeps existing functionality)
@@ -255,6 +259,7 @@ class TraumaOrchestrator:
             "active_sessions": len(self._sessions),
             "medsiglip": self.triager.MODEL_ID,
             "medgemma": self.visual_analyzer.MODEL_ID,
+            "lora_adapter": self.visual_analyzer.lora_adapter,
         }
 
     # ------------------------------------------------------------------
