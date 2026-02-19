@@ -411,7 +411,7 @@ def collate_fn(processor):
 
 def train(args):
     # Reduce CUDA memory fragmentation (recommended when OOM on T4)
-    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+    os.environ.setdefault("PYTORCH_ALLOC_CONF", "expandable_segments:True")
 
     print(f"\n{'='*60}")
     print("MedGemma 1.5 LoRA Fine-Tuning on RSNA Trauma Dataset")
