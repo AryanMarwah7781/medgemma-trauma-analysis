@@ -14,7 +14,7 @@ import os
 import numpy as np
 import torch
 from PIL import Image
-from transformers import AutoModel, AutoProcessor
+from transformers import AutoModel, SiglipProcessor
 
 
 class MedSigLIPTriager:
@@ -63,7 +63,7 @@ class MedSigLIPTriager:
         token = hf_token or os.environ.get("HF_TOKEN")
 
         print(f"[MedSigLIPTriager] Loading {self.MODEL_ID} on {self.device}...")
-        self.processor = AutoProcessor.from_pretrained(self.MODEL_ID, token=token)
+        self.processor = SiglipProcessor.from_pretrained(self.MODEL_ID, token=token)
         self.model = AutoModel.from_pretrained(self.MODEL_ID, token=token).to(self.device)
         self.model.eval()
         print(f"[MedSigLIPTriager] Ready. Threshold={self.threshold}")
