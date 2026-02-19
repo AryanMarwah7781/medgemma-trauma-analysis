@@ -3,29 +3,39 @@
  * Theme: Medical Dark Mode (Modern, Clean, Trustworthy)
  */
 
- :root {
+:root {
     /* Colors */
-    --bg-dark: #0f172a;       /* Deep slate/midnight blue */
-    --bg-card: #1e293b;       /* Lighter slate for cards */
-    --bg-elevated: #334155;   /* Elevated surfaces */
-    
-    --primary: #0ea5e9;       /* Sky blue - standard medical tech color */
+    --bg-dark: #0f172a;
+    /* Deep slate/midnight blue */
+    --bg-card: #1e293b;
+    /* Lighter slate for cards */
+    --bg-elevated: #334155;
+    /* Elevated surfaces */
+
+    --primary: #0ea5e9;
+    /* Sky blue - standard medical tech color */
     --primary-glow: rgba(14, 165, 233, 0.4);
-    --secondary: #6366f1;     /* Indigo - for gradients/accents */
-    
-    --success: #10b981;       /* Emerald */
-    --warning: #f59e0b;       /* Amber */
-    --danger: #ef4444;        /* Red */
-    --neutral: #94a3b8;       /* Slate gray text */
-    --text-main: #f8fafc;     /* Off-white text */
-    
+    --secondary: #6366f1;
+    /* Indigo - for gradients/accents */
+
+    --success: #10b981;
+    /* Emerald */
+    --warning: #f59e0b;
+    /* Amber */
+    --danger: #ef4444;
+    /* Red */
+    --neutral: #94a3b8;
+    /* Slate gray text */
+    --text-main: #f8fafc;
+    /* Off-white text */
+
     /* Spacing */
     --spacing-xs: 4px;
     --spacing-sm: 8px;
     --spacing-md: 16px;
     --spacing-lg: 24px;
     --spacing-xl: 32px;
-    
+
     /* Effects */
     --radius-sm: 6px;
     --radius-md: 12px;
@@ -34,7 +44,8 @@
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
     --glass: rgba(30, 41, 59, 0.7);
-    --glass-border: rgba(255, 255, 255, 0.08); /* Subtle white border */
+    --glass-border: rgba(255, 255, 255, 0.08);
+    /* Subtle white border */
 }
 
 * {
@@ -47,7 +58,7 @@ body {
     font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, sans-serif;
     background-color: var(--bg-dark);
     /* Subtle background grid pattern */
-    background-image: 
+    background-image:
         radial-gradient(at 0% 0%, rgba(14, 165, 233, 0.15) 0px, transparent 50%),
         radial-gradient(at 100% 100%, rgba(99, 102, 241, 0.15) 0px, transparent 50%);
     background-attachment: fixed;
@@ -64,24 +75,34 @@ body {
 }
 
 /* Typography */
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
     font-weight: 700;
     line-height: 1.2;
     letter-spacing: -0.02em;
 }
 
 h1 {
-    font-size: 2.5rem;
-    margin-bottom: var(--spacing-xs);
-    background: linear-gradient(135deg, var(--text-main) 0%, var(--primary) 100%);
+    font-size: 3.5rem;
+    letter-spacing: -0.03em;
+    margin-bottom: var(--spacing-sm);
+    background: linear-gradient(135deg, #ffffff 0%, var(--primary) 50%, var(--secondary) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 30px rgba(14, 165, 233, 0.3);
 }
 
 .subtitle {
+    font-size: 1.25rem;
     color: var(--neutral);
-    font-size: 1.1rem;
-    margin-bottom: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 /* Header */
@@ -115,13 +136,19 @@ header {
 
 /* Cards */
 .card {
-    background: var(--glass);
-    border: 1px solid var(--glass-border);
-    backdrop-filter: blur(12px);
+    background: linear-gradient(145deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(16px);
     border-radius: var(--radius-lg);
-    padding: var(--spacing-lg);
-    transition: transform 0.2s ease, border-color 0.2s ease;
-    box-shadow: var(--shadow-md);
+    padding: var(--spacing-xl);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(14, 165, 233, 0.15);
+    border-color: rgba(14, 165, 233, 0.3);
 }
 
 .card h3 {
@@ -138,58 +165,88 @@ header {
 /* Upload Section */
 .upload-zone {
     text-align: center;
-    border: 2px dashed var(--glass-border);
+    border: 2px dashed rgba(14, 165, 233, 0.4);
     border-radius: var(--radius-lg);
-    padding: 4rem 2rem;
-    background: rgba(255, 255, 255, 0.02);
-    transition: all 0.3s ease;
+    padding: 5rem 2rem;
+    background: linear-gradient(to bottom, rgba(14, 165, 233, 0.02), rgba(14, 165, 233, 0.05));
+    box-shadow: 0 0 30px rgba(14, 165, 233, 0.05) inset;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     cursor: pointer;
+    position: relative;
+    overflow: hidden;
 }
 
-.upload-zone:hover, .upload-zone.dragover {
+.upload-zone:hover,
+.upload-zone.dragover {
     border-color: var(--primary);
-    background: rgba(14, 165, 233, 0.05);
-    transform: translateY(-2px);
+    background: linear-gradient(to bottom, rgba(14, 165, 233, 0.05), rgba(14, 165, 233, 0.1));
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 40px rgba(14, 165, 233, 0.2) inset;
 }
 
 .upload-icon {
-    font-size: 3rem;
-    color: var(--neutral);
+    font-size: 4rem;
+    color: var(--primary);
     margin-bottom: var(--spacing-md);
-    transition: color 0.3s ease;
+    transition: all 0.4s ease;
+    filter: drop-shadow(0 0 10px rgba(14, 165, 233, 0.3));
 }
 
 .upload-zone:hover .upload-icon {
-    color: var(--primary);
+    color: #fff;
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 15px rgba(14, 165, 233, 0.6));
 }
 
 .btn-primary {
     background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     color: white;
-    padding: 12px 28px;
-    border-radius: 999px; /* Pill shape */
-    font-weight: 600;
+    padding: 14px 32px;
+    border-radius: 999px;
+    /* Pill shape */
+    font-weight: 700;
     border: none;
     cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
-    font-size: 1rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 8px 24px rgba(14, 165, 233, 0.4);
+    font-size: 1.1rem;
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    letter-spacing: 0.5px;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-primary::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transform: skewX(-20deg);
+    transition: all 0.5s ease;
+}
+
+.btn-primary:hover::after {
+    left: 150%;
 }
 
 .btn-primary:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(14, 165, 233, 0.4);
-    filter: brightness(1.1);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(14, 165, 233, 0.6);
+    filter: brightness(1.15);
 }
 
 .btn-primary:active {
     transform: translateY(0);
 }
 
-input[type="file"] { display: none; }
+input[type="file"] {
+    display: none;
+}
 
 /* Vitals Form */
 .vitals-toggle {
@@ -218,7 +275,8 @@ input[type="file"] { display: none; }
     padding: var(--spacing-md);
     border-radius: var(--radius-md);
     border: 1px solid var(--glass-border);
-    display: none; /* Hidden by default */
+    display: none;
+    /* Hidden by default */
 }
 
 .vitals-panel.open {
@@ -229,8 +287,15 @@ input[type="file"] { display: none; }
 }
 
 @keyframes slideDown {
-    from { opacity: 0; transform: translateY(-10px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .form-group label {
@@ -262,7 +327,10 @@ input[type="file"] { display: none; }
 /* Loading State */
 .loading-overlay {
     position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     background: rgba(15, 23, 42, 0.9);
     backdrop-filter: blur(8px);
     display: flex;
@@ -281,20 +349,27 @@ input[type="file"] { display: none; }
 }
 
 .loader {
-    width: 60px;
-    height: 60px;
-    border: 4px solid rgba(14, 165, 233, 0.3);
+    width: 80px;
+    height: 80px;
+    border: 4px solid rgba(14, 165, 233, 0.2);
     border-top-color: var(--primary);
+    border-right-color: var(--secondary);
     border-radius: 50%;
     animation: spin 1s linear infinite;
-    margin-bottom: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+    box-shadow: 0 0 30px rgba(14, 165, 233, 0.4);
 }
 
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
 
 /* Results Grid */
 .results-container {
-    display: none; /* Hidden by default */
+    display: none;
+    /* Hidden by default */
     margin-top: var(--spacing-xl);
 }
 
@@ -306,13 +381,29 @@ input[type="file"] { display: none; }
 }
 
 /* Specific Card Placements */
-.col-span-12 { grid-column: span 12; }
-.col-span-8 { grid-column: span 8; }
-.col-span-6 { grid-column: span 6; }
-.col-span-4 { grid-column: span 4; }
+.col-span-12 {
+    grid-column: span 12;
+}
+
+.col-span-8 {
+    grid-column: span 8;
+}
+
+.col-span-6 {
+    grid-column: span 6;
+}
+
+.col-span-4 {
+    grid-column: span 4;
+}
 
 @media (max-width: 1024px) {
-    .col-span-8, .col-span-6, .col-span-4 { grid-column: span 12; }
+
+    .col-span-8,
+    .col-span-6,
+    .col-span-4 {
+        grid-column: span 12;
+    }
 }
 
 /* Stat Rows */
@@ -324,23 +415,44 @@ input[type="file"] { display: none; }
     border-bottom: 1px solid var(--glass-border);
 }
 
-.stat-row:last-child { border-bottom: none; }
+.stat-row:last-child {
+    border-bottom: none;
+}
 
-.stat-label { color: var(--neutral); font-size: 0.9rem; }
-.stat-value { font-weight: 600; font-size: 1.1rem; }
+.stat-label {
+    color: var(--neutral);
+    font-size: 0.9rem;
+}
+
+.stat-value {
+    font-weight: 600;
+    font-size: 1.1rem;
+}
 
 /* Status Colors */
-.text-success { color: var(--success); }
-.text-warning { color: var(--warning); }
-.text-danger { color: var(--danger); }
-.text-neutral { color: var(--neutral); }
+.text-success {
+    color: var(--success);
+}
+
+.text-warning {
+    color: var(--warning);
+}
+
+.text-danger {
+    color: var(--danger);
+}
+
+.text-neutral {
+    color: var(--neutral);
+}
 
 /* Report Box */
 .report-content {
     background: rgba(0, 0, 0, 0.3);
     border-radius: var(--radius-md);
     padding: var(--spacing-md);
-    font-family: 'JetBrains Mono', monospace; /* Monospaced for clinical report alignment */
+    font-family: 'JetBrains Mono', monospace;
+    /* Monospaced for clinical report alignment */
     font-size: 0.85rem;
     line-height: 1.6;
     color: #e2e8f0;
@@ -380,7 +492,8 @@ input[type="file"] { display: none; }
     background: rgba(99, 102, 241, 0.2);
     border: 1px solid rgba(99, 102, 241, 0.3);
     color: #e0e7ff;
-    align-self: flex-end; /* Note: needs flex parent */
+    align-self: flex-end;
+    /* Note: needs flex parent */
     margin-left: auto;
     border-bottom-right-radius: 2px;
 }
@@ -429,24 +542,61 @@ input[type="file"] { display: none; }
     transition: all 0.2s;
 }
 
-.btn-icon:hover { transform: scale(1.05); filter: brightness(1.1); }
-.btn-icon:disabled { background: var(--neutral); opacity: 0.5; cursor: not-allowed; }
+.btn-icon:hover {
+    transform: scale(1.05);
+    filter: brightness(1.1);
+}
+
+.btn-icon:disabled {
+    background: var(--neutral);
+    opacity: 0.5;
+    cursor: not-allowed;
+}
 
 /* Utility */
-.mb-lg { margin-bottom: var(--spacing-lg); }
-.text-center { text-align: center; }
-.hidden { display: none !important; }
+.mb-lg {
+    margin-bottom: var(--spacing-lg);
+}
+
+.text-center {
+    text-align: center;
+}
+
+.hidden {
+    display: none !important;
+}
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
 
 /* Animation Utils */
-.fade-in { animation: fadeIn 0.5s ease forwards; }
+.fade-in {
+    animation: fadeIn 0.5s ease forwards;
+}
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
