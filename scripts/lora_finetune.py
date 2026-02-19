@@ -39,7 +39,7 @@ import torch
 from PIL import Image
 
 from datasets import load_dataset
-from peft import LoraConfig, get_peft_model
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from transformers import (
     AutoModelForImageTextToText,
     AutoProcessor,
@@ -392,7 +392,7 @@ def collate_fn(processor):
             return_tensors="pt",
             padding=True,
             truncation=True,
-            max_length=2048,
+            max_length=512,  # matches max_seq_length in SFTConfig
         )
 
         # For causal LM training, labels = input_ids (with padding masked)
@@ -410,6 +410,9 @@ def collate_fn(processor):
 # ---------------------------------------------------------------------------
 
 def train(args):
+    # Reduce CUDA memory fragmentation (recommended when OOM on T4)
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
     print(f"\n{'='*60}")
     print("MedGemma 1.5 LoRA Fine-Tuning on RSNA Trauma Dataset")
     print(f"{'='*60}\n")
@@ -459,6 +462,16 @@ def train(args):
     if processor.tokenizer.pad_token is None:
         processor.tokenizer.pad_token = processor.tokenizer.eos_token
 
+    # --- Prepare 4-bit model for training (must happen before get_peft_model) ---
+    # Enables gradient checkpointing, casts norms to float32 for stability,
+    # and enables input embeddings gradients. Required for BnB 4-bit fine-tuning.
+    if cuda:
+        model = prepare_model_for_kbit_training(
+            model,
+            use_gradient_checkpointing=True,
+            gradient_checkpointing_kwargs={"use_reentrant": False},
+        )
+
     # --- Apply LoRA ---
     print(f"\n[3/4] Applying LoRA (r=16, alpha=32, targets: {LORA_TARGET_MODULES})")
     lora_config = LoraConfig(
@@ -496,7 +509,10 @@ def train(args):
         dataloader_num_workers=0,
         remove_unused_columns=False,
         label_names=["labels"],
-        max_seq_length=2048,
+        max_seq_length=512,           # CT reports are short; 2048 wastes VRAM
+        gradient_checkpointing=True,  # trade compute for memory (frees ~40% VRAM)
+        gradient_checkpointing_kwargs={"use_reentrant": False},
+        optim="paged_adamw_8bit",     # offload optimizer states, saves ~2 GiB
     )
 
     # --- Train ---
