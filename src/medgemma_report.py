@@ -1,5 +1,13 @@
 """
 MedGemma integration for medical report generation
+
+DEPRECATED: This module used Ollama + template-based reports.
+It has been replaced by the HAI-DEF multi-model pipeline:
+  - src/visual_analyzer.py  — MedGemma 1.5 4b-it via HuggingFace
+  - src/report_synthesizer.py — EAST-aligned synthesis
+  - src/orchestrator.py       — full pipeline coordination
+
+Kept for src/main.py CLI fallback only. Do not use in new code.
 """
 
 import json

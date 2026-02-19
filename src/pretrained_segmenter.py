@@ -68,6 +68,34 @@ class PreTrainedSegmenter:
             'confidence': float(mask.max())
         }
     
+    def predict_from_pil(self, pil_image: Image.Image, threshold: float = 0.5) -> dict:
+        """
+        Predict segmentation directly from a PIL Image, avoiding disk I/O.
+        Used by the orchestrator which already has images in memory.
+
+        Args:
+            pil_image: PIL Image (any mode — converted to grayscale internally).
+            threshold: Binary threshold for segmentation.
+
+        Returns:
+            Dict with mask, probability_map, and confidence.
+        """
+        img_array = np.array(pil_image.convert('L')).astype(np.float32) / 255.0
+        x = torch.from_numpy(img_array).unsqueeze(0).unsqueeze(0).to(self.device)
+
+        with torch.no_grad():
+            pred = self.model(x)
+            pred = torch.sigmoid(pred)
+
+        mask = pred.cpu().numpy()[0, 0]
+        binary_mask = (mask > threshold).astype(np.uint8)
+
+        return {
+            'mask': binary_mask,
+            'probability_map': mask,
+            'confidence': float(mask.max()),
+        }
+
     def predict_batch(self, image_paths: list, threshold: float = 0.5) -> list:
         """Predict segmentation for multiple images"""
         results = []

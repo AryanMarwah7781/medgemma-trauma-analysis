@@ -1,170 +1,245 @@
 """
-Flask web app for MedGemma Hemorrhage Quantifier
-Now with MedGemma LLM integration!
+MedGemma Trauma Analysis — Flask Web Application
+==================================================
+Serves the multi-model HAI-DEF pipeline:
+  - MedSigLIP-448 zero-shot triage
+  - MedGemma 1.5 4b-it native CT volume interpretation
+  - U-Net precise hemorrhage quantification
+  - EAST guideline-aligned report synthesis
+  - SSE streaming clinical Q&A
+
+Running with Colab tunnel:
+    USE_NGROK=true NGROK_TOKEN=your_token python app.py
+
+HuggingFace setup (required before first run):
+    1. Accept terms at https://huggingface.co/google/medgemma-1.5-4b-it
+    2. Accept terms at https://huggingface.co/google/medsiglip-448
+    3. export HF_TOKEN=hf_your_token_here
 """
 
 import os
-import sys
-import json
-import requests
-from pathlib import Path
-from flask import Flask, render_template, request, jsonify, send_from_directory
+import uuid
+
 import torch
-import numpy as np
-from PIL import Image
-import segmentation_models_pytorch as smp
+from flask import (
+    Flask,
+    Response,
+    jsonify,
+    render_template,
+    request,
+    stream_with_context,
+)
+from werkzeug.utils import secure_filename
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+from src.orchestrator import TraumaOrchestrator
+
+# ---------------------------------------------------------------------------
+# App configuration
+# ---------------------------------------------------------------------------
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # 100 MB for multi-slice uploads
+app.config["UPLOAD_FOLDER"] = "uploads"
 
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg"}
+os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
-model = None
-OLLAMA_URL = "http://localhost:11434/api/generate"
-
-
-def load_segmentation_model():
-    global model
-    if model is None:
-        print("Loading segmentation model...")
-        model = smp.Unet(
-            encoder_name='resnet34',
-            encoder_weights='imagenet',
-            in_channels=1,
-            classes=1
-        )
-        model.eval()
-        print("Segmentation model loaded!")
-    return model
+# Global orchestrator — loaded once at startup, shared across all requests
+orchestrator: TraumaOrchestrator = None
 
 
-def generate_medgemma_report(volume_ml, risk_level, num_voxels):
-    """Use MedGemma to generate a medical report"""
-    
-    prompt = f"""You are MedGemma, a medical AI assistant specialized in trauma radiology.
-Based on the following CT scan analysis findings, generate a professional radiology report:
-
-Findings:
-- Estimated hemorrhage volume: {volume_ml} mL
-- Risk level: {risk_level}
-- Number of affected voxels: {num_voxels}
-
-Generate a structured radiology report with:
-1. FINDINGS - detailed observations
-2. IMPRESSION - clinical assessment
-3. RECOMMENDATION - treatment advice
-
-Be concise and clinically accurate."""
-
-    payload = {
-        "model": "amsaravi/medgemma-4b-it:q6",
-        "prompt": prompt,
-        "stream": False,
-        "options": {
-            "temperature": 0.3,
-            "top_p": 0.9
-        }
-    }
-    
-    try:
-        response = requests.post(OLLAMA_URL, json=payload, timeout=60)
-        if response.status_code == 200:
-            result = response.json()
-            return result.get('response', '').strip()
-        else:
-            return None
-    except Exception as e:
-        print(f"MedGemma error: {e}")
-        return None
+def allowed_file(filename: str) -> bool:
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-def process_ct_scan(image_path):
-    """Process CT scan and generate report with MedGemma"""
-    seg_model = load_segmentation_model()
-    
-    img = Image.open(image_path).convert('L')
-    img_array = np.array(img).astype(np.float32) / 255.0
-    
-    x = torch.from_numpy(img_array).unsqueeze(0).unsqueeze(0)
-    with torch.no_grad():
-        pred = seg_model(x)
-        pred = torch.sigmoid(pred)
-    
-    mask = pred.cpu().numpy()[0, 0]
-    binary_mask = (mask > 0.5).astype(np.uint8)
-    
-    voxel_volume_ml = (0.5 * 0.5 * 3.0) / 1000
-    num_bleeding_voxels = np.sum(binary_mask)
-    volume_ml = num_bleeding_voxels * voxel_volume_ml
-    
-    if volume_ml < 10:
-        risk_level = "LOW"
-        recommendation = "Observation recommended"
-    elif volume_ml < 50:
-        risk_level = "MODERATE"
-        recommendation = "Consider angioembolization"
-    else:
-        risk_level = "HIGH"
-        recommendation = "Urgent intervention required"
-    
-    # Generate MedGemma report
-    print("Generating MedGemma report...")
-    llm_report = generate_medgemma_report(volume_ml, risk_level, num_bleeding_voxels)
-    
-    if not llm_report:
-        # Fallback if MedGemma fails
-        llm_report = f"""FINDINGS
-- Active extravasation detected: {volume_ml:.2f} mL
-- Risk assessment: {risk_level}
-- Voxels affected: {num_bleeding_voxels}
-
-IMPRESSION
-{"Findings warrant close clinical monitoring." if risk_level == "LOW" else "Urgent consultation recommended."}
-
-RECOMMENDATION
-{recommendation}"""
-    
-    return {
-        'volume_ml': round(volume_ml, 2),
-        'num_voxels': int(num_bleeding_voxels),
-        'risk_level': risk_level,
-        'recommendation': recommendation,
-        'llm_report': llm_report
-    }
+def load_models():
+    """Initialize all models. Called once before serving requests."""
+    global orchestrator
+    cuda = torch.cuda.is_available()
+    print(f"[app.py] CUDA available: {cuda}")
+    orchestrator = TraumaOrchestrator(
+        device="auto" if cuda else "cpu",
+        use_4bit=cuda,
+        triage_threshold=float(os.environ.get("TRIAGE_THRESHOLD", "0.25")),
+        hf_token=os.environ.get("HF_TOKEN"),
+    )
 
 
-@app.route('/')
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
+@app.route("/")
 def index():
-    return render_template('index.html')
+    return render_template("index.html")
 
 
-@app.route('/upload', methods=['POST'])
+@app.route("/upload", methods=["POST"])
 def upload():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
-    
-    filename = f"{hash(file.filename)}_{file.filename}"
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(filepath)
-    
+    """
+    Multi-slice CT scan upload and analysis.
+
+    Form fields:
+        files:      One or more CT slice images (PNG/JPG).
+        hr:         Heart rate in bpm (optional).
+        bp:         Blood pressure e.g. "90/60" (optional).
+        gcs:        Glasgow Coma Scale score (optional).
+        patient_id: Patient identifier (optional).
+
+    Returns:
+        JSON with full pipeline result including session_id for Q&A.
+    """
+    if orchestrator is None:
+        return jsonify({"success": False, "error": "Models not loaded yet."}), 503
+
+    files = request.files.getlist("files")
+    if not files or all(f.filename == "" for f in files):
+        # Backwards-compatible: also accept single-file upload as "file"
+        single = request.files.get("file")
+        if single and single.filename:
+            files = [single]
+        else:
+            return jsonify({"success": False, "error": "No files uploaded."}), 400
+
+    # Save uploaded files
+    image_paths = []
+    for file in files:
+        if file and allowed_file(file.filename):
+            filename = f"{uuid.uuid4()}_{secure_filename(file.filename)}"
+            filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+            file.save(filepath)
+            image_paths.append(filepath)
+
+    if not image_paths:
+        return jsonify({"success": False, "error": "No valid image files found."}), 400
+
+    # Extract optional vitals
+    vitals = {
+        "hr": request.form.get("hr") or None,
+        "bp": request.form.get("bp") or None,
+        "gcs": request.form.get("gcs") or None,
+    }
+    vitals = {k: v for k, v in vitals.items() if v}
+
+    patient_id = request.form.get("patient_id") or f"PT-{uuid.uuid4().hex[:6].upper()}"
+
     try:
-        result = process_ct_scan(filepath)
-        
+        result = orchestrator.run_pipeline(
+            image_paths=image_paths,
+            vitals=vitals if vitals else None,
+            patient_id=patient_id,
+        )
+        return jsonify({"success": True, "result": result})
+
+    except torch.cuda.OutOfMemoryError:
+        torch.cuda.empty_cache()
         return jsonify({
-            'success': True,
-            'filename': filename,
-            'result': result
-        })
-    
+            "success": False,
+            "error": "GPU out of memory. Try uploading fewer slices or restart the server.",
+        }), 500
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
-if __name__ == '__main__':
-    load_segmentation_model()
-    app.run(host='0.0.0.0', port=5000, debug=False)
+@app.route("/qa-stream")
+def qa_stream():
+    """
+    SSE endpoint for real-time clinical Q&A about a previously analyzed scan.
+
+    Query params:
+        session_id: UUID from a prior /upload response.
+        q:          The clinician's question.
+
+    Returns:
+        text/event-stream with token-by-token response ending with [DONE].
+    """
+    if orchestrator is None:
+        return jsonify({"error": "Models not loaded."}), 503
+
+    session_id = request.args.get("session_id", "")
+    question = request.args.get("q", "").strip()
+
+    if not session_id or not question:
+        return jsonify({"error": "session_id and q are required."}), 400
+
+    def generate():
+        try:
+            for token in orchestrator.stream_qa(session_id, question):
+                yield f"data: {token}\n\n"
+        except Exception as e:
+            yield f"data: Error: {str(e)}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Access-Control-Allow-Origin": "*",
+        },
+    )
+
+
+@app.route("/evaluate", methods=["POST"])
+def evaluate():
+    """
+    Trigger ablation study evaluation against RSNA ground truth.
+
+    JSON body:
+        data_dir: Path to CT dataset directory.
+        n_cases:  Number of cases to evaluate (default 10).
+
+    Returns:
+        JSON array of ablation result rows.
+    """
+    if orchestrator is None:
+        return jsonify({"error": "Models not loaded."}), 503
+
+    body = request.get_json(silent=True) or {}
+    data_dir = body.get("data_dir", "data/huggingface")
+    n_cases = int(body.get("n_cases", 10))
+
+    try:
+        from scripts.evaluate_pipeline import PipelineEvaluator
+        evaluator = PipelineEvaluator(orchestrator, data_dir)
+        results_df = evaluator.run_ablation(n_cases=n_cases)
+        return jsonify(results_df.to_dict(orient="records"))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/health")
+def health():
+    """Return model load status and GPU info."""
+    if orchestrator is None:
+        return jsonify({"status": "loading", "models_loaded": False}), 503
+    return jsonify({"status": "ok", **orchestrator.get_status()})
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    load_models()
+
+    # Optional: expose via ngrok for Colab demo
+    if os.environ.get("USE_NGROK", "").lower() == "true":
+        try:
+            from pyngrok import ngrok
+            ngrok_token = os.environ.get("NGROK_TOKEN")
+            if ngrok_token:
+                ngrok.set_auth_token(ngrok_token)
+            public_url = ngrok.connect(5000)
+            print(f"\n[ngrok] Public URL: {public_url}\n")
+        except ImportError:
+            print("[ngrok] pyngrok not installed. Run: pip install pyngrok")
+
+    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
