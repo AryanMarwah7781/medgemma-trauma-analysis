@@ -38,6 +38,7 @@ transformers>=4.47.0
 accelerate>=0.27.0
 huggingface_hub>=0.20.0
 sentencepiece>=0.1.99
+protobuf>=3.20.0
 
 ## Quantization (for 4-bit inference on GPU / Jetson)
 bitsandbytes>=0.43.0
