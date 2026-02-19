@@ -44,8 +44,9 @@ from transformers import (
     AutoModelForImageTextToText,
     AutoProcessor,
     BitsAndBytesConfig,
+    Trainer,
 )
-from trl import SFTConfig, SFTTrainer
+from trl import SFTConfig
 
 
 # ---------------------------------------------------------------------------
@@ -141,8 +142,8 @@ def load_nifti_as_pil(
     while len(channels) < 3:
         channels.append(channels[-1])
 
-    rgb = np.stack(channels[:3], axis=-1)  # (H, W, 3)
-    return Image.fromarray(rgb, mode="RGB")
+    rgb = np.stack(channels[:3], axis=-1)  # (H, W, 3) uint8
+    return Image.fromarray(rgb)  # PIL infers RGB from 3-channel uint8
 
 
 def build_training_examples(dataset_split, processor, max_samples: int = None, num_slices: int = 3):
@@ -347,6 +348,18 @@ def build_training_examples(dataset_split, processor, max_samples: int = None, n
     return examples
 
 
+class _MessagesDataset(torch.utils.data.Dataset):
+    """Minimal Dataset wrapper so Trainer's DataLoader can iterate over examples."""
+    def __init__(self, data):
+        self.data = data
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return self.data[idx]
+
+
 def collate_fn(processor):
     """Return a collate function that applies the MedGemma chat template."""
     def _collate(batch):
@@ -494,10 +507,10 @@ def train(args):
     print(f"  Training samples: {len(train_examples)}")
     print(f"  Output dir:       {output_dir}\n")
 
-    trainer = SFTTrainer(
+    trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=train_examples,
+        train_dataset=_MessagesDataset(train_examples),
         data_collator=collate_fn(processor),
     )
 
