@@ -129,8 +129,8 @@ class TraumaOrchestrator:
         """
         session_id = str(uuid.uuid4())
 
-        # Load all slices as PIL Images
-        pil_images = [Image.open(p).convert("RGB") for p in image_paths]
+        # Load all slices as PIL Images (supports PNG/JPG and DICOM)
+        pil_images = [self._load_image(p) for p in image_paths]
 
         # --- Layer 1: MedSigLIP Triage ---
         print(f"[Pipeline] Layer 1: Triaging {len(pil_images)} slice(s)...")
@@ -288,6 +288,94 @@ class TraumaOrchestrator:
             combined_mask = np.zeros((1, 512, 512), dtype=np.uint8)
 
         return quantify_hemorrhage(combined_mask, spacing=voxel_spacing)
+
+    def _load_image(self, path: str) -> Image.Image:
+        """
+        Load a CT slice from PNG/JPG or DICOM, returning an RGB PIL Image.
+
+        DICOM files are windowed using the embedded WindowCenter/WindowWidth
+        tags (defaulting to abdominal window 50/400 if tags are absent) and
+        normalised to uint8 before converting to RGB.
+        """
+        ext = path.rsplit(".", 1)[-1].lower() if "." in path else ""
+        if ext in ("dcm", "dicom"):
+            return self._dicom_to_pil(path)
+        return Image.open(path).convert("RGB")
+
+    @staticmethod
+    def _dicom_to_pil(path: str) -> Image.Image:
+        """Convert a DICOM file to an RGB PIL Image with CT abdominal windowing."""
+        import pydicom
+        import numpy as np
+
+        ds = pydicom.dcmread(path, force=True)
+        pixels = ds.pixel_array.astype(np.float32)
+
+        # Apply RescaleSlope / RescaleIntercept to get Hounsfield Units
+        slope = float(getattr(ds, "RescaleSlope", 1))
+        intercept = float(getattr(ds, "RescaleIntercept", 0))
+        pixels = pixels * slope + intercept
+
+        # CT window — use embedded tags, fall back to abdominal window (50/400)
+        center = float(getattr(ds, "WindowCenter", 50))
+        width = float(getattr(ds, "WindowWidth", 400))
+        if isinstance(center, pydicom.multival.MultiValue):
+            center = float(center[0])
+        if isinstance(width, pydicom.multival.MultiValue):
+            width = float(width[0])
+
+        lo = center - width / 2.0
+        hi = center + width / 2.0
+        pixels = np.clip(pixels, lo, hi)
+        pixels = ((pixels - lo) / (hi - lo) * 255).astype(np.uint8)
+
+        # Stack grayscale into RGB
+        rgb = np.stack([pixels, pixels, pixels], axis=-1)
+        return Image.fromarray(rgb)
+
+    def _load_image(self, path: str) -> Image.Image:
+        """
+        Load a CT slice from PNG/JPG or DICOM, returning an RGB PIL Image.
+
+        DICOM files are windowed using the embedded WindowCenter/WindowWidth
+        tags (defaulting to abdominal window 50/400 if tags are absent) and
+        normalised to uint8 before converting to RGB.
+        """
+        ext = path.rsplit(".", 1)[-1].lower() if "." in path else ""
+        if ext in ("dcm", "dicom"):
+            return self._dicom_to_pil(path)
+        return Image.open(path).convert("RGB")
+
+    @staticmethod
+    def _dicom_to_pil(path: str) -> Image.Image:
+        """Convert a DICOM file to an RGB PIL Image with CT abdominal windowing."""
+        import pydicom
+        import numpy as np
+
+        ds = pydicom.dcmread(path, force=True)
+        pixels = ds.pixel_array.astype(np.float32)
+
+        # Apply RescaleSlope / RescaleIntercept to get Hounsfield Units
+        slope = float(getattr(ds, "RescaleSlope", 1))
+        intercept = float(getattr(ds, "RescaleIntercept", 0))
+        pixels = pixels * slope + intercept
+
+        # CT window — use embedded tags, fall back to abdominal window (50/400)
+        center = float(getattr(ds, "WindowCenter", 50))
+        width = float(getattr(ds, "WindowWidth", 400))
+        if isinstance(center, pydicom.multival.MultiValue):
+            center = float(center[0])
+        if isinstance(width, pydicom.multival.MultiValue):
+            width = float(width[0])
+
+        lo = center - width / 2.0
+        hi = center + width / 2.0
+        pixels = np.clip(pixels, lo, hi)
+        pixels = ((pixels - lo) / (hi - lo) * 255).astype(np.uint8)
+
+        # Stack grayscale into RGB
+        rgb = np.stack([pixels, pixels, pixels], axis=-1)
+        return Image.fromarray(rgb)
 
     def _prune_old_sessions(self):
         """Remove sessions older than SESSION_TTL_SECONDS."""

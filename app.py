@@ -47,7 +47,7 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # 100 MB for multi-slice uploads
 app.config["UPLOAD_FOLDER"] = "uploads"
 
-ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg"}
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "dcm", "dicom"}
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
 # Global orchestrator — loaded once at startup, shared across all requests
