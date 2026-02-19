@@ -1,88 +1,60 @@
-# MedGemma Hemorrhage Quantifier
-
-AI-powered system for detecting and quantifying hemorrhaging in trauma patients from CT angiogram scans using MedGemma.
-
-## 🏥 The Problem
-
-When trauma patients arrive in the ER with internal bleeding, doctors need to answer:
-1. Where is the bleeding?
-2. How much blood has pooled (in ml)?
-3. Do we need emergency surgery?
-
-**Current state:** Radiologists manually eyeball CT scans — slow and subjective.
-
-## 💡 Our Solution
-
-AI that analyzes CT angiograms to:
-- Detect active bleeding (contrast pooling outside vessels)
-- Quantify exact blood volume in milliliters
-- Generate structured medical reports with treatment recommendations
-
-## 🔧 Technical Pipeline
-
-```
-CT Angiogram → Pre-processing → U-Net Segmentation → Volume Calculation → MedGemma Report
-```
-
-### Components
-
-1. **Image Pre-processing** — Windowing, normalization
-2. **Segmentation Model** — U-Net trained on RSNA data
-3. **Volume Quantification** — Voxel counting → ml conversion
-4. **MedGemma** — Generate natural language reports
-
-## 📊 Dataset
-
-[RSNA 2023 Abdominal Trauma Detection](https://www.kaggle.com/competitions/rsna-2023-abdominal-trauma-detection)
-- 206 CT scans with segmentation masks (HuggingFace preprocessed)
-- Detects: liver, spleen, kidney injuries + active extravasation
-
-## 🏆 Competition
-
-Google HAI-DEF Hackathon
-- **Deadline:** February 24, 2026
-- **Eval:** Execution (30%), MedGemma usage (20%), Feasibility (20%), Problem (15%), Impact (15%)
-
-## 📦 Tech Stack
-
-- **Segmentation:** U-Net / nnUNet
-- **LLM:** MedGemma (via Ollama/HuggingFace)
-- **Data:** RSNA dataset (HuggingFace)
-- **Frontend:** Web app (TBD)
-
-## 🚀 Getting Started
-
-```bash
-# Clone the repo
-git clone https://github.com/AryanMarwah7781/medgemma-trauma-analysis.git
-cd medgemma-trauma-analysis
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-## 📁 Project Structure
-
-```
-medgemma-trauma-analysis/
-├── data/                  # Dataset downloads
-├── models/                # Trained models
-├── src/
-│   ├── preprocessing/    # Image processing
-│   ├── segmentation/     # U-Net models
-│   ├── quantification/   # Volume calculation
-│   └── generation/       # MedGemma integration
-├── app/                   # Web frontend
-├── README.md
-└── requirements.txt
-```
-
-## 📝 Submission
-
-- Write-up (max 3 pages)
-- Code (reproducible)
-- Video demo (3 min)
-
+---
+title: MedGemma Trauma Analysis
+emoji: 🏥
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: true
 ---
 
-Built for the Google HAI-DEF Hackathon 2026
+# MedGemma Trauma Analysis
+
+AI-powered multi-model pipeline for CT hemorrhage detection, quantification, and clinical decision support.
+
+## Pipeline
+
+```
+N CT slices + vitals → MedSigLIP triage → MedGemma 1.5 visual analysis
+  → U-Net quantification → EAST-aligned report → SSE streaming Q&A
+```
+
+## Models Used
+
+- `google/medgemma-1.5-4b-it` — visual CT analysis + report synthesis
+- `google/medsiglip-448` — zero-shot per-slice triage scoring
+- U-Net ResNet34 — voxel-level hemorrhage segmentation
+
+## Setup (HF Spaces)
+
+Set the following secrets in Space settings:
+
+| Secret | Value |
+|---|---|
+| `HF_TOKEN` | Your HuggingFace token (read access to gated models) |
+| `LORA_ADAPTER` | `AryanMarwah/medgemma-trauma-lora` (optional) |
+
+**Note:** First startup takes ~10-15 minutes to download models.
+
+## Local / Colab Usage
+
+```bash
+git clone https://github.com/AryanMarwah7781/medgemma-trauma-analysis
+cd medgemma-trauma-analysis
+pip install -r requirements.txt
+
+export HF_TOKEN=hf_your_token
+export PORT=5000              # optional, defaults to 7860
+export LORA_ADAPTER=AryanMarwah/medgemma-trauma-lora  # optional
+
+python app.py
+```
+
+For Colab with ngrok tunnel:
+```bash
+USE_NGROK=true NGROK_TOKEN=your_token python app.py
+```
+
+## Hackathon
+
+Google HAI-DEF Hackathon 2026 — Deadline Feb 24, 2026

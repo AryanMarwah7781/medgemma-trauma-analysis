@@ -235,15 +235,16 @@ if __name__ == "__main__":
     load_models()
 
     # Optional: expose via ngrok for Colab demo
+    port = int(os.environ.get("PORT", 7860))  # 7860 = HF Spaces default; 5000 for local/Colab
     if os.environ.get("USE_NGROK", "").lower() == "true":
         try:
             from pyngrok import ngrok
             ngrok_token = os.environ.get("NGROK_TOKEN")
             if ngrok_token:
                 ngrok.set_auth_token(ngrok_token)
-            public_url = ngrok.connect(5000)
+            public_url = ngrok.connect(port)
             print(f"\n[ngrok] Public URL: {public_url}\n")
         except ImportError:
             print("[ngrok] pyngrok not installed. Run: pip install pyngrok")
 
-    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
