@@ -14,7 +14,7 @@ import os
 import numpy as np
 import torch
 from PIL import Image
-from transformers import AutoModel, SiglipProcessor
+from transformers import AutoModel, SiglipImageProcessor, SiglipTokenizer
 
 
 class MedSigLIPTriager:
@@ -63,7 +63,10 @@ class MedSigLIPTriager:
         token = hf_token or os.environ.get("HF_TOKEN")
 
         print(f"[MedSigLIPTriager] Loading {self.MODEL_ID} on {self.device}...")
-        self.processor = SiglipProcessor.from_pretrained(self.MODEL_ID, token=token)
+        # Load image processor and tokenizer separately — SiglipProcessor combines
+        # them but hits a transformers bug where the tokenizer routing returns None.
+        self.image_processor = SiglipImageProcessor.from_pretrained(self.MODEL_ID, token=token)
+        self.tokenizer = SiglipTokenizer.from_pretrained(self.MODEL_ID, token=token)
         self.model = AutoModel.from_pretrained(self.MODEL_ID, token=token).to(self.device)
         self.model.eval()
         print(f"[MedSigLIPTriager] Ready. Threshold={self.threshold}")
@@ -88,12 +91,17 @@ class MedSigLIPTriager:
             (self.IMAGE_SIZE, self.IMAGE_SIZE), Image.BILINEAR
         )
 
-        inputs = self.processor(
-            text=self.LABELS,
-            images=image,
+        text_inputs = self.tokenizer(
+            self.LABELS,
             padding="max_length",
+            truncation=True,
             return_tensors="pt",
         ).to(self.device)
+        image_inputs = self.image_processor(
+            images=image,
+            return_tensors="pt",
+        ).to(self.device)
+        inputs = {**text_inputs, **image_inputs}
 
         with torch.no_grad():
             outputs = self.model(**inputs)
