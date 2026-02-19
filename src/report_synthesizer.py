@@ -129,7 +129,7 @@ class ReportSynthesizer:
         def _generate():
             return self.va.model.generate(
                 **inputs,
-                max_new_tokens=800,
+                max_new_tokens=1024,
                 do_sample=False,
                 repetition_penalty=1.15,
                 no_repeat_ngram_size=4,
@@ -146,18 +146,35 @@ class ReportSynthesizer:
             output[0][input_len:], skip_special_tokens=True
         ).strip()
 
-        # MedGemma 1.5 is a thinking model — it may prepend internal reasoning
-        # before the actual report. Strip everything up to the first real section
-        # header. Use regex to match headers on their own line (not in comma lists
-        # like "CLINICAL INDICATION, FINDINGS, IMPRESSION...").
+        # The prompt pre-fills "CLINICAL INDICATION\n...\n\nFINDINGS" so the
+        # model typically continues from there — the decoded output starts with
+        # FINDINGS content, not a header.
+        #
+        # Two cases to handle:
+        #   A) Model re-generated a full report (contains "CLINICAL INDICATION"
+        #      on its own line) — possibly with a thinking preamble before it.
+        #      Strip preamble and use the model's full report.
+        #   B) Model continued from the pre-filled FINDINGS — output starts
+        #      with plain CT findings text. Re-attach the pre-filled headers.
         import re
-        header_pattern = re.compile(
-            r'^(CLINICAL INDICATION|FINDINGS|IMPRESSION|RADIOLOGY|TRAUMA RADIOLOGY|CT ANGIOGRAM)',
-            re.MULTILINE | re.IGNORECASE
+
+        full_report_m = re.search(
+            r'^CLINICAL INDICATION',
+            report, re.MULTILINE | re.IGNORECASE
         )
-        m = header_pattern.search(report)
-        if m:
-            report = report[m.start():].strip()
+
+        if full_report_m:
+            # Case A: strip any thinking preamble before the first header
+            report = report[full_report_m.start():].strip()
+        else:
+            # Case B: model continued from FINDINGS — prepend the pre-filled
+            # sections so the final report is complete
+            report = (
+                "CLINICAL INDICATION\n"
+                "Abdominal CT angiogram for trauma evaluation.\n\n"
+                "FINDINGS\n"
+                + report
+            )
 
         non_ascii = sum(1 for c in report if ord(c) > 127)
         if not report or (non_ascii / max(len(report), 1)) > 0.25:
