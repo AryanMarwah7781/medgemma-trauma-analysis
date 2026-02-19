@@ -98,32 +98,88 @@ def build_training_examples(dataset_split, processor, max_samples: int = None):
 
     for item in items:
         try:
-            img_path = item.get("img_path")
-            if not img_path:
-                continue
-
-            # Load CT image.
-            # HF cache stores gzip-compressed DICOM files without extension.
-            # Try in order: plain PIL → gzip+DICOM → plain DICOM.
+            # ----------------------------------------------------------------
+            # Multi-strategy CT image loader
+            # Strategy 1: HuggingFace Image feature (auto-decoded PIL Image).
+            #   This is the primary path for jherng/rsna-2023-abdominal-trauma-
+            #   detection, which stores CT slices as HF Image features in the
+            #   "image" column. img_path points to raw shard files, not images.
+            # Strategy 2: dict-with-bytes (HF raw format, not yet decoded)
+            # Strategy 3: PIL direct file open (PNG/JPEG img_path)
+            # Strategy 4: gzip-compressed DICOM
+            # Strategy 5: plain DICOM
+            # Strategy 6: NIfTI (.nii / .nii.gz) via nibabel
+            # ----------------------------------------------------------------
             ct_image = None
-            try:
-                ct_image = Image.open(img_path).convert("RGB")
-            except Exception:
-                pass
+
+            # Strategy 1 & 2: item["image"] from HuggingFace datasets
+            img_field = item.get("image")
+            if img_field is not None:
+                if isinstance(img_field, Image.Image):
+                    ct_image = img_field.convert("RGB")
+                elif isinstance(img_field, dict):
+                    raw_bytes = img_field.get("bytes")
+                    if raw_bytes:
+                        try:
+                            ct_image = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
+                        except Exception:
+                            pass
+                    if ct_image is None and img_field.get("path"):
+                        try:
+                            ct_image = Image.open(img_field["path"]).convert("RGB")
+                        except Exception:
+                            pass
+
+            # Strategies 3-6: fall back to img_path file loading
+            if ct_image is None:
+                img_path = item.get("img_path")
+                if not img_path:
+                    continue
+
+                # Strategy 3: plain PIL
+                try:
+                    ct_image = Image.open(img_path).convert("RGB")
+                except Exception:
+                    pass
+
+                # Strategy 4: gzip-compressed DICOM
+                if ct_image is None:
+                    try:
+                        import pydicom
+                        with gzip.open(img_path, "rb") as f:
+                            raw = f.read()
+                        dcm = pydicom.dcmread(io.BytesIO(raw))
+                        arr = dcm.pixel_array.astype(np.float32)
+                        arr = (arr - arr.min()) / (arr.max() - arr.min() + 1e-8)
+                        ct_image = Image.fromarray((arr * 255).astype(np.uint8)).convert("RGB")
+                    except Exception:
+                        pass
+
+                # Strategy 5: plain DICOM
+                if ct_image is None:
+                    try:
+                        import pydicom
+                        dcm = pydicom.dcmread(img_path)
+                        arr = dcm.pixel_array.astype(np.float32)
+                        arr = (arr - arr.min()) / (arr.max() - arr.min() + 1e-8)
+                        ct_image = Image.fromarray((arr * 255).astype(np.uint8)).convert("RGB")
+                    except Exception:
+                        pass
+
+                # Strategy 6: NIfTI (.nii / .nii.gz)
+                if ct_image is None:
+                    try:
+                        import nibabel as nib
+                        vol = nib.load(img_path).get_fdata()
+                        sl = vol[:, :, vol.shape[2] // 2] if vol.ndim == 3 else vol
+                        sl = sl.astype(np.float32)
+                        sl = (sl - sl.min()) / (sl.max() - sl.min() + 1e-8)
+                        ct_image = Image.fromarray((sl * 255).astype(np.uint8)).convert("RGB")
+                    except Exception:
+                        pass
 
             if ct_image is None:
-                import pydicom
-                try:
-                    with gzip.open(img_path, "rb") as f:
-                        raw = f.read()
-                    dcm = pydicom.dcmread(io.BytesIO(raw))
-                except Exception:
-                    dcm = pydicom.dcmread(img_path)
-
-                arr = dcm.pixel_array.astype(np.float32)
-                arr = (arr - arr.min()) / (arr.max() - arr.min() + 1e-8)
-                arr = (arr * 255).astype(np.uint8)
-                ct_image = Image.fromarray(arr if arr.ndim == 3 else arr, mode=None if arr.ndim == 3 else "L").convert("RGB")
+                continue  # all strategies failed — skip this example
 
             # Read classification labels
             extravasation = int(item.get("extravasation", 0))  # 0=healthy,1=injury
