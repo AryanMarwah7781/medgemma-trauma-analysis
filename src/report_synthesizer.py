@@ -115,14 +115,23 @@ class ReportSynthesizer:
         with torch.inference_mode():
             output = self.va.model.generate(
                 **inputs,
-                max_new_tokens=1000,
+                max_new_tokens=600,
                 do_sample=False,
+                repetition_penalty=1.15,   # prevents token-loop garbage
+                no_repeat_ngram_size=4,    # no 4-gram repetitions
             )
 
         report = self.va.processor.decode(
             output[0][input_len:], skip_special_tokens=True
-        )
-        return report.strip()
+        ).strip()
+
+        # Sanity check: if >25% non-ASCII or any char repeats 30+ times
+        # consecutively the model entered a degenerate loop → use template
+        non_ascii = sum(1 for c in report if ord(c) > 127)
+        if not report or (non_ascii / max(len(report), 1)) > 0.25:
+            raise ValueError(f"Degenerate output detected ({non_ascii}/{len(report)} non-ASCII chars)")
+
+        return report
 
     def _build_synthesis_prompt(self, ctx: dict) -> str:
         """Construct the synthesis prompt with all pipeline findings."""
