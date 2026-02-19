@@ -129,7 +129,7 @@ class ReportSynthesizer:
         def _generate():
             return self.va.model.generate(
                 **inputs,
-                max_new_tokens=600,
+                max_new_tokens=800,
                 do_sample=False,
                 repetition_penalty=1.15,
                 no_repeat_ngram_size=4,
@@ -146,19 +146,18 @@ class ReportSynthesizer:
             output[0][input_len:], skip_special_tokens=True
         ).strip()
 
-        # MedGemma 1.5 is a thinking model — it prepends internal reasoning
-        # (wrapped in <unused94>thought...)</thought> or similar tokens) before
-        # the actual response. Strip everything up to the first real section header.
+        # MedGemma 1.5 is a thinking model — it may prepend internal reasoning
+        # before the actual report. Strip everything up to the first real section
+        # header. Use regex to match headers on their own line (not in comma lists
+        # like "CLINICAL INDICATION, FINDINGS, IMPRESSION...").
         import re
-        section_headers = [
-            "CLINICAL INDICATION", "FINDINGS", "IMPRESSION",
-            "RADIOLOGY", "TRAUMA RADIOLOGY", "CT ANGIOGRAM",
-        ]
-        for header in section_headers:
-            idx = report.upper().find(header)
-            if idx != -1:
-                report = report[idx:].strip()
-                break
+        header_pattern = re.compile(
+            r'^(CLINICAL INDICATION|FINDINGS|IMPRESSION|RADIOLOGY|TRAUMA RADIOLOGY|CT ANGIOGRAM)',
+            re.MULTILINE | re.IGNORECASE
+        )
+        m = header_pattern.search(report)
+        if m:
+            report = report[m.start():].strip()
 
         non_ascii = sum(1 for c in report if ord(c) > 127)
         if not report or (non_ascii / max(len(report), 1)) > 0.25:
@@ -186,36 +185,27 @@ class ReportSynthesizer:
 
         triage = ctx.get("triage_summary", {})
 
-        return f"""You are a trauma surgery attending generating a formal radiology report.
+        return f"""You are a trauma surgery attending. Write a formal CT radiology report using the AI analysis data below.
 
-AI ANALYSIS INPUTS:
--------------------
-MedSigLIP Triage: {triage.get('suspicious_count', '?')} of {triage.get('total_slices', '?')} slices flagged suspicious (max score: {triage.get('max_score', 0):.2f})
-MedGemma Visual Findings:
-  - Injury pattern: {ctx.get('injury_pattern', 'N/A')}
-  - Organs involved: {organs}
-  - Bleeding: {ctx.get('bleeding_description', 'N/A')}
-  - Severity estimate: {ctx.get('severity_estimate', 'N/A')}
-U-Net Quantification:
-  - Hemorrhage volume: {ctx.get('volume_ml', 0):.1f} mL
-  - Risk tier: {ctx.get('risk_level', 'N/A')} ({shock_class})
-  - Segmented voxels: {ctx.get('num_voxels', 0):,}
-Patient Vitals: {vitals_str}
-Differential Diagnosis:
-{differentials}
+Do NOT include any reasoning, planning, analysis, or preamble.
+Start your response IMMEDIATELY with the word "CLINICAL INDICATION" on the first line.
 
-EAST GUIDELINE RECOMMENDATION:
-{east_rec}
+AI ANALYSIS DATA:
+- MedSigLIP Triage: {triage.get('suspicious_count', '?')}/{triage.get('total_slices', '?')} slices suspicious (max score: {triage.get('max_score', 0):.2f})
+- Injury pattern: {ctx.get('injury_pattern', 'N/A')}
+- Organs involved: {organs}
+- Bleeding: {ctx.get('bleeding_description', 'N/A')}
+- Severity: {ctx.get('severity_estimate', 'N/A')}
+- Hemorrhage volume: {ctx.get('volume_ml', 0):.1f} mL ({shock_class})
+- Risk tier: {ctx.get('risk_level', 'N/A')}
+- Patient vitals: {vitals_str}
+- Differentials: {', '.join(ctx.get('differential_diagnosis', [])) or 'None listed'}
+- EAST recommendation: {east_rec}
 
-Generate a formal radiology report with these exact sections:
 CLINICAL INDICATION
-FINDINGS
-IMPRESSION
-EAST GUIDELINE RECOMMENDATION
-DIFFERENTIAL DIAGNOSIS
-FOLLOW-UP PLAN
+Abdominal CT angiogram for trauma evaluation.
 
-Be concise, clinically precise, and actionable. Do not repeat the inputs verbatim."""
+FINDINGS"""
 
     def _template_fallback(self, ctx: dict) -> str:
         """
