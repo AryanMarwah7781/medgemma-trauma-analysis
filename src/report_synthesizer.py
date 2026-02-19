@@ -146,6 +146,20 @@ class ReportSynthesizer:
             output[0][input_len:], skip_special_tokens=True
         ).strip()
 
+        # MedGemma 1.5 is a thinking model — it prepends internal reasoning
+        # (wrapped in <unused94>thought...)</thought> or similar tokens) before
+        # the actual response. Strip everything up to the first real section header.
+        import re
+        section_headers = [
+            "CLINICAL INDICATION", "FINDINGS", "IMPRESSION",
+            "RADIOLOGY", "TRAUMA RADIOLOGY", "CT ANGIOGRAM",
+        ]
+        for header in section_headers:
+            idx = report.upper().find(header)
+            if idx != -1:
+                report = report[idx:].strip()
+                break
+
         non_ascii = sum(1 for c in report if ord(c) > 127)
         if not report or (non_ascii / max(len(report), 1)) > 0.25:
             raise ValueError(f"Degenerate output detected ({non_ascii}/{len(report)} non-ASCII chars)")
