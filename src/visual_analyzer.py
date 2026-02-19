@@ -44,7 +44,7 @@ class MedGemmaVisualAnalyzer:
     """
 
     MODEL_ID = "google/medgemma-1.5-4b-it"
-    MAX_SLICES = 5  # ~256 image tokens each; 5 slices = ~1280 tokens, safe in 8K context
+    MAX_SLICES = 10  # ~256 image tokens each; 10 slices = ~2560 tokens, safe in 8K context
 
     def __init__(
         self,
@@ -172,7 +172,7 @@ class MedGemmaVisualAnalyzer:
         Yields:
             str: Individual token strings. Caller wraps as "data: {token}\n\n".
         """
-        slices = pil_images[:3]  # Fewer images for Q&A to keep latency low
+        slices = pil_images[: self.MAX_SLICES]  # Pass all available context slices for Deep Volume Q&A
 
         context_summary = (
             f"Previous AI analysis findings:\n"

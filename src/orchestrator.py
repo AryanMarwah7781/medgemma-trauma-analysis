@@ -135,7 +135,7 @@ class TraumaOrchestrator:
         # --- Layer 1: MedSigLIP Triage ---
         print(f"[Pipeline] Layer 1: Triaging {len(pil_images)} slice(s)...")
         suspicious_images, all_triage_results = self.triager.get_suspicious_slices(
-            pil_images, max_slices=5
+            pil_images, max_slices=10
         )
         triage_summary = self.triager.get_triage_summary(all_triage_results)
         print(
