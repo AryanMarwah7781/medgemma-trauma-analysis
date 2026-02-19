@@ -12,7 +12,7 @@ Designed to run on Google Colab (T4 16GB or A100 40GB).
 Expected training time: ~2 hours on T4, ~45 min on A100.
 
 Setup (run once in Colab):
-    !pip install transformers>=4.47.0 peft>=0.10.0 trl>=0.8.0 bitsandbytes accelerate datasets
+    !pip install transformers>=4.47.0 peft>=0.10.0 trl>=0.8.0 bitsandbytes accelerate datasets nibabel
 
     from huggingface_hub import login
     login("hf_YOUR_TOKEN")
@@ -66,7 +66,76 @@ LORA_TARGET_MODULES = [
 # Dataset preparation
 # ---------------------------------------------------------------------------
 
-def build_training_examples(dataset_split, processor, max_samples: int = None):
+# CT soft tissue windowing defaults (top Kaggle solutions, RSNA 2023)
+CT_WINDOW_CENTER = 50
+CT_WINDOW_WIDTH = 400
+
+
+def load_nifti_as_pil(
+    path: str,
+    num_slices: int = 3,
+    center: int = CT_WINDOW_CENTER,
+    width: int = CT_WINDOW_WIDTH,
+) -> Image.Image:
+    """
+    Load a NIfTI CT volume (.nii / .nii.gz) and return a PIL RGB Image using
+    the 2.5D multi-slice approach used by top RSNA 2023 competitors.
+
+    Steps:
+      1. Load volume with nibabel — shape (H, W, D) after orientation fix.
+      2. Sample `num_slices` evenly-spaced axial slices from the middle 60%
+         of the volume (avoids empty edge slices).
+      3. Apply soft-tissue CT windowing (center=50 HU, width=400 HU):
+             pixel = clip(pixel, center-width/2, center+width/2)
+             pixel = (pixel - lo) / (hi - lo) * 255
+      4. Stack the first 3 processed slices as R, G, B channels.
+         If num_slices < 3, the last slice is repeated to fill channels.
+
+    Args:
+        path:       Path to .nii or .nii.gz file.
+        num_slices: Number of axial slices to extract (default 3).
+        center:     CT window center in HU (default 50 — soft tissue).
+        width:      CT window width in HU (default 400 — soft tissue).
+
+    Returns:
+        PIL Image in RGB mode, ready for MedGemma.
+    """
+    import nibabel as nib
+
+    vol = nib.load(path).get_fdata()  # float64, shape varies
+
+    # Collapse any trailing dimensions (e.g., 4D time series)
+    while vol.ndim > 3:
+        vol = vol[..., 0]
+    if vol.ndim == 2:
+        vol = vol[:, :, np.newaxis]
+
+    depth = vol.shape[2]
+
+    # Sample from middle 60% to avoid uninformative edge slices
+    z_start = int(depth * 0.2)
+    z_end = max(z_start + 1, int(depth * 0.8))
+    z_indices = np.linspace(z_start, z_end - 1, num_slices, dtype=int)
+
+    lo = center - width / 2.0
+    hi = center + width / 2.0
+
+    channels = []
+    for z in z_indices:
+        sl = vol[:, :, z].astype(np.float32)
+        sl = np.clip(sl, lo, hi)
+        sl = (sl - lo) / (hi - lo) * 255.0
+        channels.append(sl.astype(np.uint8))
+
+    # Pad to 3 channels for RGB (repeat last slice if needed)
+    while len(channels) < 3:
+        channels.append(channels[-1])
+
+    rgb = np.stack(channels[:3], axis=-1)  # (H, W, 3)
+    return Image.fromarray(rgb, mode="RGB")
+
+
+def build_training_examples(dataset_split, processor, max_samples: int = None, num_slices: int = 3):
     """
     Convert RSNA abdominal trauma dataset into MedGemma chat format.
 
@@ -99,50 +168,57 @@ def build_training_examples(dataset_split, processor, max_samples: int = None):
     for item in items:
         try:
             # ----------------------------------------------------------------
-            # Multi-strategy CT image loader
-            # Strategy 1: HuggingFace Image feature (auto-decoded PIL Image).
-            #   This is the primary path for jherng/rsna-2023-abdominal-trauma-
-            #   detection, which stores CT slices as HF Image features in the
-            #   "image" column. img_path points to raw shard files, not images.
-            # Strategy 2: dict-with-bytes (HF raw format, not yet decoded)
-            # Strategy 3: PIL direct file open (PNG/JPEG img_path)
-            # Strategy 4: gzip-compressed DICOM
-            # Strategy 5: plain DICOM
-            # Strategy 6: NIfTI (.nii / .nii.gz) via nibabel
+            # Multi-strategy CT image loader (NIfTI-first for this dataset)
+            #
+            # jherng/rsna-2023-abdominal-trauma-detection stores CT volumes as
+            # NIfTI files (.nii.gz) at img_path. The 2.5D approach extracts 3
+            # axial slices with proper CT windowing and stacks them as RGB.
+            #
+            # Strategy 1: NIfTI via load_nifti_as_pil   ← primary (this dataset)
+            # Strategy 2: HF Image feature (PIL Image in item["image"])
+            # Strategy 3: HF Image feature (dict-with-bytes)
+            # Strategy 4: PIL direct file open (PNG/JPEG)
+            # Strategy 5: gzip-compressed DICOM
+            # Strategy 6: plain DICOM
             # ----------------------------------------------------------------
             ct_image = None
+            img_path = item.get("img_path")
 
-            # Strategy 1 & 2: item["image"] from HuggingFace datasets
-            img_field = item.get("image")
-            if img_field is not None:
-                if isinstance(img_field, Image.Image):
-                    ct_image = img_field.convert("RGB")
-                elif isinstance(img_field, dict):
-                    raw_bytes = img_field.get("bytes")
-                    if raw_bytes:
-                        try:
-                            ct_image = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
-                        except Exception:
-                            pass
-                    if ct_image is None and img_field.get("path"):
-                        try:
-                            ct_image = Image.open(img_field["path"]).convert("RGB")
-                        except Exception:
-                            pass
+            # Strategy 1: NIfTI — primary path for jherng dataset
+            if img_path:
+                try:
+                    ct_image = load_nifti_as_pil(img_path, num_slices=num_slices)
+                except Exception:
+                    pass
 
-            # Strategies 3-6: fall back to img_path file loading
+            # Strategy 2 & 3: item["image"] HuggingFace Image feature
             if ct_image is None:
-                img_path = item.get("img_path")
-                if not img_path:
-                    continue
+                img_field = item.get("image")
+                if img_field is not None:
+                    if isinstance(img_field, Image.Image):
+                        ct_image = img_field.convert("RGB")
+                    elif isinstance(img_field, dict):
+                        raw_bytes = img_field.get("bytes")
+                        if raw_bytes:
+                            try:
+                                ct_image = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
+                            except Exception:
+                                pass
+                        if ct_image is None and img_field.get("path"):
+                            try:
+                                ct_image = Image.open(img_field["path"]).convert("RGB")
+                            except Exception:
+                                pass
 
-                # Strategy 3: plain PIL
+            # Strategies 4-6: file-path fallbacks
+            if ct_image is None and img_path:
+                # Strategy 4: plain PIL (PNG/JPEG)
                 try:
                     ct_image = Image.open(img_path).convert("RGB")
                 except Exception:
                     pass
 
-                # Strategy 4: gzip-compressed DICOM
+                # Strategy 5: gzip-compressed DICOM
                 if ct_image is None:
                     try:
                         import pydicom
@@ -150,31 +226,25 @@ def build_training_examples(dataset_split, processor, max_samples: int = None):
                             raw = f.read()
                         dcm = pydicom.dcmread(io.BytesIO(raw))
                         arr = dcm.pixel_array.astype(np.float32)
-                        arr = (arr - arr.min()) / (arr.max() - arr.min() + 1e-8)
-                        ct_image = Image.fromarray((arr * 255).astype(np.uint8)).convert("RGB")
+                        lo = CT_WINDOW_CENTER - CT_WINDOW_WIDTH / 2.0
+                        hi = CT_WINDOW_CENTER + CT_WINDOW_WIDTH / 2.0
+                        arr = np.clip(arr, lo, hi)
+                        arr = (arr - lo) / (hi - lo) * 255
+                        ct_image = Image.fromarray(arr.astype(np.uint8)).convert("RGB")
                     except Exception:
                         pass
 
-                # Strategy 5: plain DICOM
+                # Strategy 6: plain DICOM
                 if ct_image is None:
                     try:
                         import pydicom
                         dcm = pydicom.dcmread(img_path)
                         arr = dcm.pixel_array.astype(np.float32)
-                        arr = (arr - arr.min()) / (arr.max() - arr.min() + 1e-8)
-                        ct_image = Image.fromarray((arr * 255).astype(np.uint8)).convert("RGB")
-                    except Exception:
-                        pass
-
-                # Strategy 6: NIfTI (.nii / .nii.gz)
-                if ct_image is None:
-                    try:
-                        import nibabel as nib
-                        vol = nib.load(img_path).get_fdata()
-                        sl = vol[:, :, vol.shape[2] // 2] if vol.ndim == 3 else vol
-                        sl = sl.astype(np.float32)
-                        sl = (sl - sl.min()) / (sl.max() - sl.min() + 1e-8)
-                        ct_image = Image.fromarray((sl * 255).astype(np.uint8)).convert("RGB")
+                        lo = CT_WINDOW_CENTER - CT_WINDOW_WIDTH / 2.0
+                        hi = CT_WINDOW_CENTER + CT_WINDOW_WIDTH / 2.0
+                        arr = np.clip(arr, lo, hi)
+                        arr = (arr - lo) / (hi - lo) * 255
+                        ct_image = Image.fromarray(arr.astype(np.uint8)).convert("RGB")
                     except Exception:
                         pass
 
@@ -380,8 +450,8 @@ def train(args):
     model.print_trainable_parameters()
 
     # --- Prepare training data ---
-    print(f"\n[4/4] Preparing training examples (max_samples={args.max_samples})")
-    train_examples = build_training_examples(dataset, processor, max_samples=args.max_samples)
+    print(f"\n[4/4] Preparing training examples (max_samples={args.max_samples}, num_slices={args.num_slices})")
+    train_examples = build_training_examples(dataset, processor, max_samples=args.max_samples, num_slices=args.num_slices)
 
     if not train_examples:
         raise ValueError("No training examples could be built. Check dataset format.")
@@ -460,6 +530,8 @@ def parse_args():
                         help="Number of training epochs")
     parser.add_argument("--max_samples", type=int, default=200,
                         help="Max training examples (full dataset=206)")
+    parser.add_argument("--num_slices", type=int, default=3,
+                        help="Axial slices per NIfTI volume (stacked as RGB channels)")
     parser.add_argument("--lora_r", type=int, default=16,
                         help="LoRA rank")
     parser.add_argument("--lora_alpha", type=int, default=32,
