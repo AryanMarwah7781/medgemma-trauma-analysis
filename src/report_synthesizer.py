@@ -98,7 +98,13 @@ class ReportSynthesizer:
             return self._template_fallback(context)
 
     def _medgemma_synthesis(self, ctx: dict) -> str:
-        """Run a text-only MedGemma inference for report synthesis."""
+        """Run a text-only MedGemma inference for report synthesis.
+
+        The LoRA adapter was fine-tuned on image→JSON tasks. Using it for
+        text-only long-form generation causes degenerate token loops.
+        We disable the adapter for this call so the base model weights handle
+        the report; the adapter stays active for visual analysis (Layer 2).
+        """
         prompt = self._build_synthesis_prompt(ctx)
         messages = [{"role": "user", "content": [{"type": "text", "text": prompt}]}]
 
@@ -112,21 +118,34 @@ class ReportSynthesizer:
         inputs = {k: v.to(self.va._device) for k, v in inputs.items()}
         input_len = inputs["input_ids"].shape[-1]
 
-        with torch.inference_mode():
-            output = self.va.model.generate(
+        # Disable LoRA adapter for text-only synthesis — base model weights
+        # generate clean English prose; adapter is image→JSON specialized.
+        try:
+            from peft import PeftModel
+            use_disable = isinstance(self.va.model, PeftModel)
+        except ImportError:
+            use_disable = False
+
+        def _generate():
+            return self.va.model.generate(
                 **inputs,
                 max_new_tokens=600,
                 do_sample=False,
-                repetition_penalty=1.15,   # prevents token-loop garbage
-                no_repeat_ngram_size=4,    # no 4-gram repetitions
+                repetition_penalty=1.15,
+                no_repeat_ngram_size=4,
             )
+
+        with torch.inference_mode():
+            if use_disable:
+                with self.va.model.disable_adapter():
+                    output = _generate()
+            else:
+                output = _generate()
 
         report = self.va.processor.decode(
             output[0][input_len:], skip_special_tokens=True
         ).strip()
 
-        # Sanity check: if >25% non-ASCII or any char repeats 30+ times
-        # consecutively the model entered a degenerate loop → use template
         non_ascii = sum(1 for c in report if ord(c) > 127)
         if not report or (non_ascii / max(len(report), 1)) > 0.25:
             raise ValueError(f"Degenerate output detected ({non_ascii}/{len(report)} non-ASCII chars)")
