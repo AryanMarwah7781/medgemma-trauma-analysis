@@ -237,20 +237,29 @@ def train(args):
 
     # --- Load model with 4-bit quantization ---
     print(f"\n[2/4] Loading model: {MODEL_ID}")
+
+    # Free any leftover VRAM from dataset loading before bringing in the model
+    import gc
+    gc.collect()
+    if cuda:
+        torch.cuda.empty_cache()
+
     bnb_config = None
     if cuda:
+        # T4 is Turing architecture — no native bfloat16, use float16 instead
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_compute_dtype=torch.float16,
             bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4",
         )
 
     model = AutoModelForImageTextToText.from_pretrained(
         MODEL_ID,
-        torch_dtype=torch.bfloat16 if cuda else torch.float32,
+        dtype=torch.float16 if cuda else torch.float32,  # float16 for T4, not bfloat16
         device_map="auto" if cuda else "cpu",
         quantization_config=bnb_config,
+        low_cpu_mem_usage=True,  # load layer-by-layer to avoid RAM spike
         token=hf_token,
     )
     processor = AutoProcessor.from_pretrained(MODEL_ID, token=hf_token)
@@ -287,7 +296,7 @@ def train(args):
         gradient_accumulation_steps=8,
         warmup_steps=50,
         learning_rate=args.learning_rate,
-        fp16=cuda,
+        fp16=cuda,   # T4 uses float16, not bfloat16
         bf16=False,
         logging_steps=10,
         save_strategy="epoch",
