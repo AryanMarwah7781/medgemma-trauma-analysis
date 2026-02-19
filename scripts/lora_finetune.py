@@ -32,7 +32,6 @@ import json
 import os
 from pathlib import Path
 
-import numpy as np
 import torch
 from PIL import Image
 
@@ -66,20 +65,29 @@ LORA_TARGET_MODULES = [
 
 def build_training_examples(dataset_split, processor, max_samples: int = None):
     """
-    Convert RSNA CT scan + segmentation mask pairs into MedGemma chat format.
+    Convert RSNA abdominal trauma dataset into MedGemma chat format.
 
-    Each training example pairs a CT slice image with a text label derived
-    from the ground truth segmentation mask, teaching MedGemma to recognize
-    hemorrhage patterns it has now explicitly seen labeled data for.
+    Actual dataset fields (jherng/rsna-2023-abdominal-trauma-detection):
+        img_path    : str  — path to the CT slice image file
+        extravasation: int — ClassLabel: 0=healthy, 1=injury (active bleeding)
+        liver       : int  — ClassLabel: 0=healthy, 1=low grade, 2=high grade
+        spleen      : int  — ClassLabel: 0=healthy, 1=low grade, 2=high grade
+        kidney      : int  — ClassLabel: 0=healthy, 1=low grade, 2=high grade
+        bowel       : int  — ClassLabel: 0=healthy, 1=injury
+        any_injury  : bool — True if any organ has injury
 
-    Label schema:
-        - If mask has >0 bleeding pixels → "hemorrhage present"
-          + location (upper/lower, left/right quadrant)
-        - If mask is all zeros → "no active hemorrhage detected"
+    Label → response_json mapping:
+        extravasation=1              → active hemorrhage description
+        liver/spleen/kidney grade 2  → high-grade laceration (severe)
+        liver/spleen/kidney grade 1  → low-grade laceration (moderate)
+        any_injury=False             → no acute injury
 
     Returns:
-        list of {"messages": [...], "images": [...]} dicts
+        list of {"messages": [...]} dicts compatible with SFTTrainer
     """
+    # Organ grade names for prompt generation
+    GRADE_NAMES = {0: "healthy", 1: "low-grade injury", 2: "high-grade injury"}
+
     examples = []
     items = list(dataset_split)
     if max_samples:
@@ -87,64 +95,75 @@ def build_training_examples(dataset_split, processor, max_samples: int = None):
 
     for item in items:
         try:
-            # The HuggingFace dataset provides PIL images directly
-            ct_image = item.get("image") or item.get("ct_image")
-            mask = item.get("mask") or item.get("seg_mask")
-
-            if ct_image is None:
+            img_path = item.get("img_path")
+            if not img_path:
                 continue
 
-            # Convert mask to numpy for analysis
-            if mask is not None:
-                mask_arr = np.array(mask)
-                bleeding_voxels = int(np.sum(mask_arr > 0))
-                has_hemorrhage = bleeding_voxels > 100  # threshold: >100 positive pixels
-            else:
-                bleeding_voxels = 0
-                has_hemorrhage = False
+            # Load CT image from disk
+            ct_image = Image.open(img_path).convert("RGB")
 
-            # Build the assistant response based on ground truth
-            if has_hemorrhage:
-                # Estimate location from mask centroid
-                if mask is not None:
-                    coords = np.argwhere(mask_arr > 0)
-                    centroid_y, centroid_x = coords.mean(axis=0)
-                    h, w = mask_arr.shape
-                    vertical = "upper" if centroid_y < h / 2 else "lower"
-                    horizontal = "left" if centroid_x < w / 2 else "right"
-                    location = f"{vertical} {horizontal}"
+            # Read classification labels
+            extravasation = int(item.get("extravasation", 0))  # 0=healthy,1=injury
+            liver   = int(item.get("liver",   0))  # 0/1/2
+            spleen  = int(item.get("spleen",  0))
+            kidney  = int(item.get("kidney",  0))
+            bowel   = int(item.get("bowel",   0))  # 0=healthy,1=injury
+            any_injury = bool(item.get("any_injury", False))
+
+            # Build organs_involved list (exclude healthy)
+            organs_involved = []
+            if liver   > 0: organs_involved.append(f"liver ({GRADE_NAMES[liver]})")
+            if spleen  > 0: organs_involved.append(f"spleen ({GRADE_NAMES[spleen]})")
+            if kidney  > 0: organs_involved.append(f"kidney ({GRADE_NAMES[kidney]})")
+            if bowel   > 0: organs_involved.append("bowel (injury)")
+
+            # Determine severity from worst organ grade + extravasation
+            max_grade = max(liver, spleen, kidney)
+            if max_grade == 2 or (extravasation == 1 and max_grade >= 1):
+                severity = "severe"
+            elif extravasation == 1 or max_grade == 1 or bowel == 1:
+                severity = "moderate"
+            else:
+                severity = "none"
+
+            # Build injury pattern description
+            if not any_injury:
+                injury_pattern = "No acute intraabdominal injury identified"
+                bleeding_description = "No active extravasation or hemoperitoneum detected"
+                differential = [
+                    "No acute injury",
+                    "Clinically correlate with exam findings"
+                ]
+            else:
+                organ_str = ", ".join(organs_involved) if organs_involved else "abdomen"
+                if extravasation == 1:
+                    injury_pattern = f"Active arterial extravasation with solid organ injury: {organ_str}"
+                    bleeding_description = "Active contrast extravasation consistent with ongoing hemorrhage"
                 else:
-                    location = "abdomen"
+                    injury_pattern = f"Solid organ laceration without active extravasation: {organ_str}"
+                    bleeding_description = "Parenchymal laceration with hematoma; no active extravasation"
+                differential = [
+                    "Solid organ laceration with contained hematoma",
+                    "Active arterial extravasation requiring intervention",
+                    "Subcapsular hematoma"
+                ]
+                if bowel == 1:
+                    differential.append("Bowel perforation with mesenteric injury")
 
-                response_json = json.dumps({
-                    "injury_pattern": f"Active hemorrhage in the {location} abdomen",
-                    "organs_involved": ["abdomen"],
-                    "bleeding_description": f"Active extravasation with approximately {bleeding_voxels} positive voxels",
-                    "severity_estimate": "moderate" if bleeding_voxels < 5000 else "severe",
-                    "differential_diagnosis": [
-                        "Solid organ laceration with active hemorrhage",
-                        "Mesenteric vascular injury",
-                        "Retroperitoneal hematoma"
-                    ]
-                }, indent=2)
-            else:
-                response_json = json.dumps({
-                    "injury_pattern": "No active hemorrhage identified",
-                    "organs_involved": [],
-                    "bleeding_description": "No active extravasation or hemoperitoneum",
-                    "severity_estimate": "none",
-                    "differential_diagnosis": [
-                        "No acute injury",
-                        "Clinically correlate with exam findings"
-                    ]
-                }, indent=2)
+            response_json = json.dumps({
+                "injury_pattern": injury_pattern,
+                "organs_involved": [o.split(" (")[0] for o in organs_involved],
+                "bleeding_description": bleeding_description,
+                "severity_estimate": severity,
+                "differential_diagnosis": differential,
+            }, indent=2)
 
-            # MedGemma chat format with image interleaved
+            # MedGemma chat format: image + text interleaved in user turn
             messages = [
                 {
                     "role": "user",
                     "content": [
-                        {"type": "image", "image": ct_image.convert("RGB")},
+                        {"type": "image", "image": ct_image},
                         {"type": "text", "text": (
                             "You are a trauma radiologist. Analyze this abdominal CT angiogram "
                             "slice for hemorrhage and solid organ injury. Respond in JSON with "
