@@ -103,6 +103,15 @@ class MedGemmaVisualAnalyzer:
 
         # Track the actual device for input tensors
         self._device = next(self.model.parameters()).device
+        
+        # Dynamically limit slices to prevent OOM on smaller GPUs like Colab's T4 (16GB)
+        self.max_qa_slices = self.MAX_SLICES
+        if cuda_available:
+            gpu_name = torch.cuda.get_device_name(0)
+            if "T4" in gpu_name:
+                self.max_qa_slices = 3
+                print("[MedGemmaVisualAnalyzer] Tesla T4 detected. Capping Deep Volume Q&A to 3 slices to prevent OOM.")
+        
         print(f"[MedGemmaVisualAnalyzer] Ready on {self._device}.")
 
     def analyze(self, pil_images: list, vitals: dict = None) -> dict:
@@ -172,7 +181,8 @@ class MedGemmaVisualAnalyzer:
         Yields:
             str: Individual token strings. Caller wraps as "data: {token}\n\n".
         """
-        slices = pil_images[: self.MAX_SLICES]  # Pass all available context slices for Deep Volume Q&A
+        # Pass available context slices, capped by GPU capabilities to prevent OOM
+        slices = pil_images[: self.max_qa_slices]
 
         context_summary = (
             f"Previous AI analysis findings:\n"
@@ -220,7 +230,20 @@ class MedGemmaVisualAnalyzer:
             "do_sample": False,
         }
 
-        thread = threading.Thread(target=self.model.generate, kwargs=gen_kwargs)
+        def generation_task():
+            try:
+                self.model.generate(**gen_kwargs)
+            except torch.cuda.OutOfMemoryError:
+                torch.cuda.empty_cache()
+                print("[MedGemmaVisualAnalyzer] WARNING: GPU OOM during Q&A.")
+                streamer.text_queue.put("\n\n[Warning: GPU Out of Memory. The volume context is too large for the current GPU. Try asking a simpler question or restarting the server.]")
+                streamer.text_queue.put(streamer.stop_signal)
+            except Exception as e:
+                print(f"[MedGemmaVisualAnalyzer] ERROR during Q&A generation: {e}")
+                streamer.text_queue.put(f"\n\n[Error generating response: {str(e)}]")
+                streamer.text_queue.put(streamer.stop_signal)
+
+        thread = threading.Thread(target=generation_task)
         thread.start()
 
         for token in streamer:
