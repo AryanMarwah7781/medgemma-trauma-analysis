@@ -193,15 +193,21 @@ class MedGemmaVisualAnalyzer:
         # Pass available context slices, capped by GPU capabilities to prevent OOM
         slices = pil_images[: self.max_qa_slices]
 
+        # Build a clean context summary — never include raw_response to avoid echo loops
+        bleeding = context.get('bleeding_description', 'N/A')
+        # Strip any leaked raw narrative (keep it short and clean)
+        if len(bleeding) > 150 or "FINDINGS" in bleeding.upper() or "IMPRESSION" in bleeding.upper():
+            bleeding = "See initial analysis"
+
         context_summary = (
-            f"Previous AI analysis findings:\n"
+            f"Prior automated analysis of this volume:\n"
             f"- Injury pattern: {context.get('injury_pattern', 'N/A')}\n"
-            f"- Organs involved: {', '.join(context.get('organs_involved', []))}\n"
-            f"- Bleeding: {context.get('bleeding_description', 'N/A')}\n"
+            f"- Organs involved: {', '.join(context.get('organs_involved', [])) or 'None identified'}\n"
+            f"- Bleeding: {bleeding}\n"
             f"- Severity: {context.get('severity_estimate', 'N/A')}\n"
             f"- Hemorrhage volume: {context.get('volume_ml', 0):.1f} mL\n"
             f"- Risk level: {context.get('risk_level', 'N/A')}\n"
-            f"- Differential: {', '.join(context.get('differential_diagnosis', []))}\n"
+            f"- Differential: {', '.join(context.get('differential_diagnosis', [])) or 'N/A'}\n"
         )
 
         content = []
@@ -287,48 +293,94 @@ class MedGemmaVisualAnalyzer:
 
         content.append({"type": "text", "text": (
             f"You are a trauma radiologist analyzing {len(slices)} abdominal CT "
-            f"angiogram slice(s) from a trauma patient.{vitals_text}\n\n"
-            "Analyze for: active hemorrhage, hemoperitoneum, solid organ injury "
-            "(liver, spleen, kidneys), vascular injury, and bowel/mesenteric injury.\n\n"
-            "Respond ONLY with valid JSON in this exact format:\n"
+            f"angiogram slice(s) from a trauma patient presented together as a volume.{vitals_text}\n\n"
+            f"Evaluate ALL {len(slices)} slices collectively as a single volume — not individually.\n"
+            "Look for: active hemorrhage, hemoperitoneum, solid organ injury "
+            "(liver, spleen, kidneys), vascular injury, bowel/mesenteric injury.\n\n"
+            "YOU MUST respond with ONLY a valid JSON object. "
+            "Do NOT write FINDINGS, IMPRESSION, or any narrative text. "
+            "Output ONLY the JSON object below, filling in the values:\n\n"
             "{\n"
-            '  "injury_pattern": "<brief description of injury pattern>",\n'
+            '  "injury_pattern": "<one sentence describing overall injury pattern across all slices>",\n'
             '  "organs_involved": ["<organ1>", "<organ2>"],\n'
-            '  "bleeding_description": "<description of bleeding if present>",\n'
+            '  "bleeding_description": "<describe bleeding location and extent, or none if absent>",\n'
             '  "severity_estimate": "<none|mild|moderate|severe>",\n'
             '  "differential_diagnosis": ["<dx1>", "<dx2>", "<dx3>"]\n'
-            "}"
+            "}\n\n"
+            "Remember: output ONLY the JSON object, nothing else."
         )})
 
         return content
 
     def _parse_findings(self, raw: str) -> dict:
         """
-        Extract JSON from model response. Handles cases where the model
-        wraps JSON in markdown code blocks or adds explanatory text.
+        Extract JSON from model response. Handles nested JSON, markdown code
+        blocks, and plain clinical narrative fallback.
         """
-        # Try to find a JSON object in the response
-        json_match = re.search(r"\{[^{}]*\}", raw, re.DOTALL)
-        if json_match:
-            try:
-                parsed = json.loads(json_match.group())
-                # Ensure all expected keys exist with safe defaults
-                parsed.setdefault("injury_pattern", "Unable to determine from provided slices")
-                parsed.setdefault("organs_involved", [])
-                parsed.setdefault("bleeding_description", "See raw response below")
-                parsed.setdefault("severity_estimate", "unknown")
-                parsed.setdefault("differential_diagnosis", [])
-                parsed["raw_response"] = raw
+        # Try direct parse first (model sometimes returns pure JSON)
+        try:
+            parsed = json.loads(raw.strip())
+            if isinstance(parsed, dict):
+                self._fill_defaults(parsed, raw)
                 return parsed
-            except json.JSONDecodeError:
-                pass
+        except json.JSONDecodeError:
+            pass
 
-        # Fallback: return raw text in structured form
+        # Find balanced JSON object using brace counting (handles nested arrays/objects)
+        start = raw.find('{')
+        if start != -1:
+            depth = 0
+            for i, ch in enumerate(raw[start:], start):
+                if ch == '{':
+                    depth += 1
+                elif ch == '}':
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            parsed = json.loads(raw[start:i + 1])
+                            if isinstance(parsed, dict):
+                                self._fill_defaults(parsed, raw)
+                                return parsed
+                        except json.JSONDecodeError:
+                            break
+
+        # Fallback: parse clinical narrative into structured fields
+        # Extract severity from IMPRESSION or narrative text
+        severity = "unknown"
+        raw_lower = raw.lower()
+        if "no acute" in raw_lower or "no evidence" in raw_lower or "no injury" in raw_lower:
+            severity = "none"
+        elif "severe" in raw_lower:
+            severity = "severe"
+        elif "moderate" in raw_lower:
+            severity = "moderate"
+        elif "mild" in raw_lower:
+            severity = "mild"
+
+        # Extract a short, clean bleeding description (first 120 chars of FINDINGS)
+        bleeding = "Not identified"
+        if "findings:" in raw_lower:
+            findings_start = raw_lower.find("findings:") + len("findings:")
+            snippet = raw[findings_start:findings_start + 200].strip()
+            bleeding = snippet[:120].rstrip(",. ") if snippet else "Not identified"
+        elif "impression:" in raw_lower:
+            imp_start = raw_lower.find("impression:") + len("impression:")
+            bleeding = raw[imp_start:imp_start + 120].strip()
+
         return {
-            "injury_pattern": "Structured output unavailable — see raw response",
+            "injury_pattern": "See raw response (model did not return JSON)",
             "organs_involved": [],
-            "bleeding_description": raw[:500] if len(raw) > 500 else raw,
-            "severity_estimate": "unknown",
+            "bleeding_description": bleeding,
+            "severity_estimate": severity,
             "differential_diagnosis": [],
             "raw_response": raw,
         }
+
+    @staticmethod
+    def _fill_defaults(parsed: dict, raw: str):
+        parsed.setdefault("injury_pattern", "Unable to determine from provided slices")
+        parsed.setdefault("organs_involved", [])
+        parsed.setdefault("bleeding_description", "Not identified")
+        parsed.setdefault("severity_estimate", "unknown")
+        parsed.setdefault("differential_diagnosis", [])
+        parsed["raw_response"] = raw
