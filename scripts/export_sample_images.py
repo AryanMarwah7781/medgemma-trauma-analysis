@@ -102,11 +102,13 @@ def main():
 
     print(f"Loading RSNA dataset...")
     from datasets import load_dataset
+    # Requires datasets<3.0.0 — newer versions dropped loading script support.
+    # Pin with: pip install "datasets==2.21.0"
     dataset = load_dataset(
         "jherng/rsna-2023-abdominal-trauma-detection",
         split="train",
         token=token,
-        trust_remote_code=True,
+        trust_remote_code=True,  # needed for datasets<3.0.0 with this dataset's loading script
     )
     print(f"  {len(dataset)} total examples available.")
 
