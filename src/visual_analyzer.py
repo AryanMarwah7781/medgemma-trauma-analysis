@@ -104,13 +104,22 @@ class MedGemmaVisualAnalyzer:
         # Track the actual device for input tensors
         self._device = next(self.model.parameters()).device
         
-        # Dynamically limit slices to prevent OOM on smaller GPUs like Colab's T4 (16GB)
+        # Dynamically limit slices based on available VRAM to prevent OOM.
+        # Each image slice costs ~256 visual tokens; 4-bit model base uses ~4GB on T4.
         self.max_qa_slices = self.MAX_SLICES
         if cuda_available:
+            total_vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
             gpu_name = torch.cuda.get_device_name(0)
-            if "T4" in gpu_name:
+            if total_vram_gb < 20:
+                # T4 (16GB), V100 (16GB), and similar — cap tightly
                 self.max_qa_slices = 3
-                print("[MedGemmaVisualAnalyzer] Tesla T4 detected. Capping Deep Volume Q&A to 3 slices to prevent OOM.")
+                print(f"[MedGemmaVisualAnalyzer] {gpu_name} ({total_vram_gb:.0f}GB VRAM) detected. Capping slices to {self.max_qa_slices} to prevent OOM.")
+            elif total_vram_gb < 32:
+                # A10G (24GB) — moderate cap
+                self.max_qa_slices = 6
+                print(f"[MedGemmaVisualAnalyzer] {gpu_name} ({total_vram_gb:.0f}GB VRAM) detected. Capping slices to {self.max_qa_slices}.")
+            else:
+                print(f"[MedGemmaVisualAnalyzer] {gpu_name} ({total_vram_gb:.0f}GB VRAM) detected. Using full slice budget ({self.max_qa_slices}).")
         
         print(f"[MedGemmaVisualAnalyzer] Ready on {self._device}.")
 
@@ -135,7 +144,7 @@ class MedGemmaVisualAnalyzer:
                 "raw_response": str
             }
         """
-        slices = pil_images[: self.MAX_SLICES]
+        slices = pil_images[: self.max_qa_slices]
         content = self._build_content(slices, vitals)
         messages = [{"role": "user", "content": content}]
 
