@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MedGemma Trauma · HAI-DEF Pipeline</title>
 
-    <!-- Fonts: DM Serif Display (display headers) + IBM Plex Mono (body/data) -->
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
     <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -18,140 +18,178 @@
 </head>
 <body>
 
-    <!-- Loading Overlay with 5-step indicator -->
+    <!-- LOADING OVERLAY -->
     <div class="loading-overlay" id="loadingOverlay">
-        <div class="loader-ring"></div>
-        <div class="loading-content">
-            <div class="loading-title">Analyzing Scan Series</div>
+        <div class="loading-card">
+            <div class="loader-ring"></div>
+            <p class="loading-title">Analyzing Scan Series</p>
             <div class="loading-steps">
-                <div class="step" id="step1">1. Preprocessing CT slices</div>
-                <div class="step" id="step2">2. MedSigLIP-448 triage scoring</div>
-                <div class="step" id="step3">3. U-Net hemorrhage segmentation</div>
-                <div class="step" id="step4">4. MedGemma 1.5 clinical reasoning</div>
-                <div class="step" id="step5">5. Generating structured report</div>
+                <div class="step" id="step1"><span class="step-dot"></span>Preprocessing CT slices</div>
+                <div class="step" id="step2"><span class="step-dot"></span>MedSigLIP-448 triage scoring</div>
+                <div class="step" id="step3"><span class="step-dot"></span>U-Net hemorrhage segmentation</div>
+                <div class="step" id="step4"><span class="step-dot"></span>MedGemma 1.5 clinical reasoning</div>
+                <div class="step" id="step5"><span class="step-dot"></span>Generating structured report</div>
             </div>
         </div>
     </div>
 
     <div class="container">
 
-        <!-- ═══ HEADER ═══════════════════════════════════════════════════ -->
+        <!-- HEADER -->
         <header class="site-header">
-            <div class="header-title">
-                <span class="header-brand">MedGemma Trauma</span>
-                <span class="header-sep">·</span>
-                <span class="header-sub">HAI-DEF Pipeline</span>
-                <span class="header-sep">·</span>
-                <span class="header-version">v1.5</span>
+            <div class="header-left">
+                <div class="header-logo">
+                    <span class="logo-icon"><i class="fas fa-heartbeat"></i></span>
+                    <h1 class="header-brand">MedGemma <span class="brand-accent">Trauma</span></h1>
+                </div>
+                <p class="header-sub">HAI-DEF Pipeline &nbsp;·&nbsp; AI-powered abdominal CT triage &amp; hemorrhage analysis</p>
             </div>
-            <div class="header-rule"></div>
-            <div class="pipeline-badges">
-                <span class="badge">MedSigLIP-448</span>
-                <span class="badge">MedGemma 1.5 4B Vision</span>
-                <span class="badge">U-Net Segmentation</span>
-                <span class="badge">EAST Guidelines</span>
+            <div class="header-badges">
+                <span class="chip">MedSigLIP-448</span>
+                <span class="chip">MedGemma 1.5 4B</span>
+                <span class="chip">U-Net Seg</span>
+                <span class="chip">EAST</span>
             </div>
         </header>
 
-        <!-- ═══ INLINE ERROR BANNER ══════════════════════════════════════ -->
+        <!-- ERROR BANNER -->
         <div class="error-banner hidden" id="errorBanner">
-            <i class="fas fa-exclamation-triangle"></i>
+            <i class="fas fa-triangle-exclamation"></i>
             <span id="errorMessage">An error occurred.</span>
-            <button class="error-dismiss" id="errorDismiss" title="Dismiss">×</button>
+            <button class="error-dismiss" id="errorDismiss">×</button>
         </div>
 
-        <!-- ═══ UPLOAD SECTION ═══════════════════════════════════════════ -->
-        <section class="upload-section" id="uploadZone">
+        <!-- UPLOAD SECTION -->
+        <section class="upload-section glass-card" id="uploadZone">
 
-            <!-- Drop Zone -->
             <div class="upload-zone" id="dropTarget">
-                <div class="upload-instructions">
-                    <div class="upload-zone-label">Drop Zone</div>
-                    <p>Drag &amp; drop PNG / JPG CT slices here</p>
-                    <p class="upload-hint">or click to browse — multi-file supported</p>
+                <div class="upload-glow"></div>
+                <div class="upload-body">
+                    <div class="upload-icon-wrap">
+                        <i class="fas fa-layer-group"></i>
+                    </div>
+                    <h2 class="upload-heading">Upload CT Slice Series</h2>
+                    <p class="upload-sub">Drag &amp; drop PNG / JPG slices here, or click to browse</p>
+                    <label class="btn-choose">
+                        <i class="fas fa-folder-open"></i> Choose Files
+                        <input type="file" id="fileInput" accept="image/png,image/jpeg,image/jpg" multiple>
+                    </label>
+                    <div class="file-count-badge hidden" id="fileCountBadge">
+                        <i class="fas fa-check-circle"></i>
+                        <span id="fileCountText">0 files staged</span>
+                    </div>
                 </div>
-                <label class="btn-choose">
-                    <i class="fas fa-folder-open"></i> Choose Files
-                    <input type="file" id="fileInput" accept="image/png,image/jpeg,image/jpg" multiple>
-                </label>
-                <div class="file-count-badge hidden" id="fileCountBadge">0 files staged</div>
             </div>
 
-            <!-- File validation message -->
+            <!-- CT thumbnail preview strip -->
+            <div class="ct-preview hidden" id="ctThumbnails"></div>
+
+            <!-- Validation message -->
             <div class="file-validation hidden" id="fileValidation"></div>
 
-            <!-- Vitals inline — always visible, 3-column -->
+            <!-- Vitals -->
             <div class="vitals-row">
-                <div class="vitals-label">Patient Vitals <span class="optional">(optional)</span></div>
+                <span class="section-label">
+                    <i class="fas fa-stethoscope"></i> Patient Vitals
+                    <span class="optional">— optional</span>
+                </span>
                 <div class="vitals-inputs">
                     <div class="vital-field">
-                        <label for="vitHR">HR (BPM)</label>
-                        <input type="number" id="vitHR" class="input-field" placeholder="110">
+                        <label for="vitHR">Heart Rate</label>
+                        <div class="input-wrap">
+                            <input type="number" id="vitHR" class="input-field" placeholder="110">
+                            <span class="input-unit">bpm</span>
+                        </div>
                     </div>
                     <div class="vital-field">
                         <label for="vitBP">Blood Pressure</label>
-                        <input type="text" id="vitBP" class="input-field" placeholder="90/60">
+                        <div class="input-wrap">
+                            <input type="text" id="vitBP" class="input-field" placeholder="90/60">
+                            <span class="input-unit">mmHg</span>
+                        </div>
                     </div>
                     <div class="vital-field">
-                        <label for="vitGCS">GCS (3–15)</label>
-                        <input type="number" id="vitGCS" class="input-field" placeholder="14" min="3" max="15">
+                        <label for="vitGCS">GCS Score</label>
+                        <div class="input-wrap">
+                            <input type="number" id="vitGCS" class="input-field" placeholder="14" min="3" max="15">
+                            <span class="input-unit">/ 15</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Analyze CTA -->
             <div class="analyze-row">
                 <button class="btn-analyze" id="analyzeBtn" disabled>
-                    <i class="fas fa-microscope"></i> Analyze
+                    <i class="fas fa-microscope"></i>
+                    <span>Run Analysis</span>
                 </button>
-                <span class="analyze-hint" id="analyzeHint">Select files to begin</span>
+                <span class="analyze-hint" id="analyzeHint">Select CT slices to begin</span>
             </div>
 
         </section>
 
-        <!-- ═══ RESULTS DASHBOARD ════════════════════════════════════════ -->
+        <!-- RESULTS -->
         <div class="results-container hidden" id="resultsContainer">
 
-            <!-- Results Header -->
-            <div class="results-header">
-                <div>
+            <div class="results-topbar">
+                <div class="results-meta">
                     <span class="results-label">Analysis Report</span>
                     <span id="patientIdDisplay" class="patient-id"></span>
                 </div>
-                <button id="resetBtn" class="btn-reset">
-                    <i class="fas fa-redo"></i> New Case
+                <button id="resetBtn" class="btn-ghost">
+                    <i class="fas fa-arrow-left"></i> New Case
                 </button>
             </div>
 
-            <!-- ─── RISK BANNER — full width, dominant visual ─────────── -->
+            <!-- RISK BANNER -->
             <div class="risk-banner unknown" id="riskBanner">
-                <div class="risk-level-block">
-                    <span class="risk-icon">■</span>
-                    <span class="risk-label">Risk Level:</span>
+                <div class="risk-left">
+                    <div class="risk-indicator">
+                        <span class="risk-dot" id="riskDot"></span>
+                        <span class="risk-label-text">Risk Level</span>
+                    </div>
                     <span class="risk-value" id="riskValue">--</span>
                 </div>
-                <div class="risk-details">
-                    <span class="risk-volume" id="riskVolume">Hemorrhage: -- mL</span>
-                    <span class="risk-sep">|</span>
-                    <span class="risk-east" id="riskEAST">EAST: --</span>
+                <div class="risk-right">
+                    <div class="risk-stat">
+                        <span class="risk-stat-label">Hemorrhage</span>
+                        <span class="risk-stat-val" id="riskVolume">-- mL</span>
+                    </div>
+                    <div class="risk-divider"></div>
+                    <div class="risk-east">
+                        <span class="risk-stat-label">EAST Recommendation</span>
+                        <span class="risk-stat-val" id="riskEAST">--</span>
+                    </div>
                 </div>
             </div>
 
-            <!-- ─── TWO-COLUMN GRID ───────────────────────────────────── -->
+            <!-- RESULTS GRID -->
             <div class="results-grid">
 
-                <!-- LEFT COLUMN: data panels -->
+                <!-- LEFT COLUMN -->
                 <div class="col-left">
 
-                    <!-- Triage Scores -->
-                    <div class="panel">
-                        <div class="panel-header">Triage Scores</div>
+                    <!-- CT Images -->
+                    <div class="panel glass-card">
+                        <div class="panel-header">
+                            <span><i class="fas fa-images"></i> CT Slices</span>
+                        </div>
+                        <div class="ct-results-strip" id="ctResultsStrip"></div>
+                    </div>
+
+                    <!-- Triage -->
+                    <div class="panel glass-card">
+                        <div class="panel-header">
+                            <span><i class="fas fa-chart-bar"></i> Triage Scores</span>
+                        </div>
                         <div id="triageRows"></div>
                     </div>
 
                     <!-- Quantification -->
-                    <div class="panel">
-                        <div class="panel-header">Quantification</div>
+                    <div class="panel glass-card">
+                        <div class="panel-header">
+                            <span><i class="fas fa-calculator"></i> Quantification</span>
+                        </div>
                         <div class="data-row">
                             <span class="data-label">Hemorrhage Vol</span>
                             <span class="data-value text-danger" id="volume">--</span>
@@ -163,8 +201,10 @@
                     </div>
 
                     <!-- Visual Findings -->
-                    <div class="panel">
-                        <div class="panel-header">Visual Findings</div>
+                    <div class="panel glass-card">
+                        <div class="panel-header">
+                            <span><i class="fas fa-eye"></i> Visual Findings</span>
+                        </div>
                         <div class="data-row">
                             <span class="data-label">Severity</span>
                             <span class="data-value" id="severity">--</span>
@@ -179,35 +219,43 @@
                         </div>
                     </div>
 
-                    <!-- Differential Diagnosis -->
-                    <div class="panel">
-                        <div class="panel-header">Differential Dx</div>
+                    <!-- Differential -->
+                    <div class="panel glass-card">
+                        <div class="panel-header">
+                            <span><i class="fas fa-list-check"></i> Differential Dx</span>
+                        </div>
                         <ul id="diffList" class="diff-list"></ul>
                     </div>
 
-                </div><!-- end col-left -->
+                </div>
 
-                <!-- RIGHT COLUMN: report + chat -->
+                <!-- RIGHT COLUMN -->
                 <div class="col-right">
 
                     <!-- Clinical Report -->
-                    <div class="panel report-panel">
+                    <div class="panel glass-card report-panel">
                         <div class="panel-header">
-                            MedGemma Clinical Report
-                            <button class="btn-copy" id="copyReportBtn" title="Copy report to clipboard">
+                            <span><i class="fas fa-file-medical"></i> MedGemma Clinical Report</span>
+                            <button class="btn-copy" id="copyReportBtn">
                                 <i class="fas fa-copy"></i> Copy
                             </button>
                         </div>
                         <div class="report-content" id="llmReport">--</div>
                     </div>
 
-                    <!-- Q&A Chat -->
-                    <div class="panel chat-panel">
-                        <div class="panel-header">Clinical Q&amp;A</div>
+                    <!-- Q&A -->
+                    <div class="panel glass-card chat-panel">
+                        <div class="panel-header">
+                            <span><i class="fas fa-comment-medical"></i> Clinical Q&amp;A</span>
+                            <span class="qa-badge">MedGemma</span>
+                        </div>
                         <div class="chat-history" id="chatHistory">
                             <div class="message ai">
-                                <div class="msg-role">MedGemma</div>
-                                <div class="msg-text">Hello. I've analyzed the scan. Ask me anything about the findings or treatment options.</div>
+                                <div class="msg-avatar"><i class="fas fa-robot"></i></div>
+                                <div class="msg-body">
+                                    <div class="msg-role">MedGemma</div>
+                                    <div class="msg-text">Hello. I've analyzed the scan. Ask me anything about the findings or treatment options.</div>
+                                </div>
                             </div>
                         </div>
                         <div class="typing-indicator hidden" id="typingIndicator">
@@ -215,13 +263,13 @@
                         </div>
                         <div class="chat-input-area">
                             <input type="text" id="qaInput" class="chat-input" placeholder="Ask a clinical follow-up question…">
-                            <button id="qaSubmit" class="btn-send" title="Send">
+                            <button id="qaSubmit" class="btn-send">
                                 <i class="fas fa-paper-plane"></i>
                             </button>
                         </div>
                     </div>
 
-                </div><!-- end col-right -->
+                </div>
 
             </div><!-- end results-grid -->
 
@@ -229,7 +277,6 @@
 
     </div><!-- end container -->
 
-    <!-- Scripts -->
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>
