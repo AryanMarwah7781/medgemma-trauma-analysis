@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MedGemma Trauma — Dev Notes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Permanent+Marker&family=Kalam:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #d4c9b0;
+    min-height: 100vh;
+    font-family: 'Caveat', cursive;
+    padding: 40px 20px 80px;
+    display: flex;
+    justify-content: center;
+  }
+
+  /* ── Page ── */
+  .page {
+    position: relative;
+    width: 860px;
+    max-width: 100%;
+    background: #fdf6e3;
+    box-shadow:
+      2px 2px 0 #c4b89a,
+      4px 4px 0 #b5a98b,
+      6px 6px 0 #a89d82,
+      8px 8px 12px rgba(0,0,0,0.4);
+    border-radius: 2px 6px 6px 2px;
+    padding: 40px 60px 80px 110px;
+
+    /* Ruled lines */
+    background-image:
+      repeating-linear-gradient(
+        transparent,
+        transparent 31px,
+        #b8d4e8 31px,
+        #b8d4e8 32px
+      );
+    background-size: 100% 32px;
+    background-position: 0 16px;
+
+    /* Clip torn bottom */
+    clip-path: polygon(
+      0% 0%, 100% 0%, 100% 97%,
+      98% 98.5%, 96% 97.2%, 94% 98.8%, 92% 97.4%, 90% 99%, 88% 97.8%,
+      86% 98.6%, 84% 97%, 82% 98.4%, 80% 97.2%, 78% 98.8%, 76% 97.5%,
+      74% 99.1%, 72% 97.8%, 70% 98.5%, 68% 97.1%, 66% 98.9%, 64% 97.6%,
+      62% 98.4%, 60% 97.2%, 58% 98.8%, 56% 97.3%, 54% 99%, 52% 97.7%,
+      50% 98.5%, 48% 97.1%, 46% 98.7%, 44% 97.4%, 42% 98.9%, 40% 97.2%,
+      38% 98.6%, 36% 97.3%, 34% 99.1%, 32% 97.8%, 30% 98.4%, 28% 97%,
+      26% 98.8%, 24% 97.5%, 22% 99%, 20% 97.7%, 18% 98.5%, 16% 97.1%,
+      14% 98.7%, 12% 97.4%, 10% 98.9%, 8% 97.2%, 6% 98.6%, 4% 97%, 2% 98.4%, 0% 97%
+    );
+  }
+
+  /* Red margin line */
+  .page::before {
+    content: '';
+    position: absolute;
+    left: 88px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: rgba(200, 60, 60, 0.55);
+    pointer-events: none;
+  }
+
+  /* Hole punches */
+  .holes {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 88px;
+    pointer-events: none;
+  }
+  .hole {
+    position: absolute;
+    left: 28px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #d4c9b0;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.3), 0 1px 2px rgba(255,255,255,0.4);
+  }
+
+  /* Coffee stain */
+  .stain {
+    position: absolute;
+    pointer-events: none;
+    border-radius: 50%;
+  }
+  .stain-1 {
+    width: 90px; height: 85px;
+    top: 120px; right: 40px;
+    background: radial-gradient(ellipse at 40% 40%,
+      transparent 28%,
+      rgba(139,90,43,0.12) 30%,
+      rgba(139,90,43,0.18) 35%,
+      rgba(139,90,43,0.08) 42%,
+      transparent 45%
+    );
+    transform: rotate(-12deg);
+  }
+  .stain-2 {
+    width: 60px; height: 58px;
+    bottom: 300px; right: 80px;
+    background: radial-gradient(ellipse at 50% 50%,
+      transparent 30%,
+      rgba(139,90,43,0.10) 32%,
+      rgba(139,90,43,0.15) 36%,
+      rgba(139,90,43,0.06) 42%,
+      transparent 45%
+    );
+    transform: rotate(8deg);
+  }
+
+  /* ── Typography ── */
+  h1 {
+    font-family: 'Permanent Marker', cursive;
+    font-size: 2.6rem;
+    color: #1a1a5e;
+    line-height: 1.1;
+    margin-bottom: 4px;
+    transform: rotate(-1.2deg);
+    display: inline-block;
+  }
+  h2 {
+    font-family: 'Permanent Marker', cursive;
+    font-size: 1.4rem;
+    color: #c41e3a;
+    margin: 40px 0 6px;
+    transform: rotate(-0.5deg);
+    display: inline-block;
+  }
+  h3 {
+    font-family: 'Kalam', cursive;
+    font-weight: 700;
+    font-size: 1.15rem;
+    color: #1a1a5e;
+    margin: 24px 0 4px;
+    text-decoration: underline;
+    text-decoration-style: wavy;
+    text-underline-offset: 4px;
+  }
+  p, li {
+    font-family: 'Caveat', cursive;
+    font-size: 1.08rem;
+    color: #222;
+    line-height: 2.0;
+    margin-bottom: 2px;
+  }
+  ul {
+    list-style: none;
+    padding: 0;
+  }
+  ul li::before {
+    content: '→ ';
+    color: #c41e3a;
+  }
+
+  /* ── Highlight ── */
+  .hl { background: rgba(255, 230, 0, 0.55); padding: 0 3px; border-radius: 2px; }
+  .hl-blue { background: rgba(150, 200, 255, 0.45); padding: 0 3px; border-radius: 2px; }
+  .hl-green { background: rgba(150, 240, 180, 0.45); padding: 0 3px; border-radius: 2px; }
+
+  /* ── Margin note ── */
+  .margin-note {
+    position: absolute;
+    left: -70px;
+    font-family: 'Kalam', cursive;
+    font-size: 0.72rem;
+    color: #c41e3a;
+    width: 62px;
+    line-height: 1.25;
+    transform: rotate(-2deg);
+    text-align: center;
+  }
+  .margin-arrow {
+    position: absolute;
+    left: -10px;
+    color: #c41e3a;
+    font-size: 0.9rem;
+  }
+
+  /* ── Sticky note ── */
+  .sticky {
+    background: #fffbaf;
+    border-bottom: 3px solid #e6e068;
+    padding: 10px 14px;
+    font-family: 'Kalam', cursive;
+    font-size: 0.95rem;
+    color: #333;
+    line-height: 1.5;
+    transform: rotate(1.8deg);
+    box-shadow: 2px 3px 8px rgba(0,0,0,0.18);
+    display: inline-block;
+    max-width: 240px;
+    margin: 12px 0 8px;
+  }
+  .sticky.pink {
+    background: #ffd6e0;
+    border-bottom-color: #f0a0b8;
+  }
+  .sticky.blue {
+    background: #d6e8ff;
+    border-bottom-color: #9ab8e0;
+    transform: rotate(-1.4deg);
+  }
+
+  /* ── Code block ── */
+  .code-block {
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    background: rgba(0,0,0,0.06);
+    border-left: 3px solid #c41e3a;
+    padding: 8px 12px;
+    margin: 8px 0;
+    border-radius: 0 4px 4px 0;
+    white-space: pre;
+    overflow-x: auto;
+    color: #1a1a5e;
+    line-height: 1.5;
+  }
+
+  /* ── Performance table ── */
+  table {
+    border-collapse: collapse;
+    font-family: 'Kalam', cursive;
+    font-size: 0.95rem;
+    width: 100%;
+    margin: 12px 0;
+    transform: rotate(-0.3deg);
+  }
+  th {
+    font-family: 'Permanent Marker', cursive;
+    font-size: 0.85rem;
+    color: #c41e3a;
+    padding: 4px 10px;
+    border-bottom: 2px solid #1a1a5e;
+    text-align: left;
+  }
+  td {
+    padding: 3px 10px;
+    border-bottom: 1px solid rgba(0,0,0,0.12);
+    color: #333;
+    line-height: 1.8;
+  }
+  tr:nth-child(even) td { background: rgba(0,0,0,0.03); }
+
+  /* ── SVG diagram container ── */
+  .diagram-wrap {
+    position: relative;
+    margin: 20px 0 12px;
+    overflow: visible;
+  }
+  .diagram-caption {
+    font-family: 'Kalam', cursive;
+    font-size: 0.8rem;
+    color: #888;
+    text-align: center;
+    margin-top: 4px;
+    font-style: italic;
+  }
+
+  /* ── Section divider ── */
+  .divider {
+    border: none;
+    border-top: 2px dashed rgba(0,0,0,0.18);
+    margin: 28px 0 20px;
+  }
+
+  /* ── Date stamp ── */
+  .date-stamp {
+    font-family: 'Kalam', cursive;
+    font-size: 0.85rem;
+    color: #999;
+    text-align: right;
+    margin-bottom: 20px;
+  }
+
+  /* ── Relative wrappers for margin notes ── */
+  .rel { position: relative; }
+
+  /* ── Page footer ── */
+  .footer {
+    font-family: 'Permanent Marker', cursive;
+    font-size: 0.9rem;
+    color: #aaa;
+    text-align: center;
+    margin-top: 48px;
+    transform: rotate(-0.5deg);
+  }
+  .footer span { color: #c41e3a; }
+
+  /* ── Spiral rings ── */
+  #rings-canvas {
+    position: absolute;
+    left: 0; top: 0;
+    width: 88px;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  /* ── Print ── */
+  @media print {
+    body { background: white; }
+    .page { box-shadow: none; clip-path: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page" id="page">
+  <!-- Hole punches -->
+  <div class="holes" id="holes">
+    <canvas id="rings-canvas"></canvas>
+  </div>
+
+  <!-- Coffee stains -->
+  <div class="stain stain-1"></div>
+  <div class="stain stain-2"></div>
+
+  <!-- ── Header ── -->
+  <div class="date-stamp">Feb 2026 — Aryan Marwah</div>
+
+  <div style="margin-bottom:28px; position:relative;">
+    <h1>MedGemma Trauma</h1>
+    <br>
+    <span style="font-family:'Kalam',cursive; font-size:1.1rem; color:#555; display:block; margin-top:2px; transform:rotate(0.4deg)">
+      HAI-DEF pipeline notes — dev diary
+    </span>
+    <div class="margin-note" style="top:10px; left:-68px; width:66px;">THIS IS<br>THE ONE!!!</div>
+  </div>
+
+  <!-- ── Problem ── -->
+  <div class="rel">
+    <h2>The Problem</h2>
+    <div class="margin-note" style="top:0px;">read EAST<br>guidelines!</div>
+  </div>
+
+  <p>Internal hemorrhage is <span class="hl">invisible on the outside</span>. Patient walks in talking, BP looks fine — 40 min later: hemorrhagic shock. The bottleneck isn't the CT scanner (that takes &lt;10s). It's everything after.</p>
+  <p style="margin-top:8px;">Current workflow: CT → radiologist reads → dictates → verbal handoff → surgeon decision. That chain = <span class="hl">20–45 minutes</span>. Grade IV–V solid organ injuries don't have 45 minutes.</p>
+
+  <div class="sticky" style="float:right; margin-left:20px; margin-top:-20px;">
+    What we need:<br>
+    ✓ speed<br>
+    ✓ structure<br>
+    ✓ not replace radiologist<br>
+    → brief the team WHILE they wait
+  </div>
+
+  <p style="margin-top:8px;">Our system: structured briefing in <span class="hl-green">&lt;25 seconds</span>. Five specialized models, one pipeline.</p>
+
+  <div style="clear:both;"></div>
+  <hr class="divider">
+
+  <!-- ── Architecture Diagram ── -->
+  <div class="rel">
+    <h2>The 5-Layer Pipeline</h2>
+    <div class="margin-note" style="top:2px; left:-72px;">drew this like<br>3 times lol</div>
+  </div>
+
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 740 340" width="100%" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- Wobble filter for hand-drawn look -->
+        <filter id="wobb" x="-5%" y="-5%" width="110%" height="110%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7" result="noise"/>
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.2" xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+        <filter id="wobbHeavy" x="-8%" y="-8%" width="116%" height="116%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="3" result="noise"/>
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="3.5" xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+        <!-- Arrowhead -->
+        <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#1a1a5e"/>
+        </marker>
+        <marker id="arrRed" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#c41e3a"/>
+        </marker>
+      </defs>
+
+      <!-- Background paper texture -->
+      <rect x="0" y="0" width="740" height="340" fill="rgba(253,246,227,0)" rx="4"/>
+
+      <!-- CT Slices input icon -->
+      <rect x="18" y="100" width="52" height="64" rx="3" fill="rgba(200,200,200,0.35)" stroke="#555" stroke-width="1.5" filter="url(#wobb)"/>
+      <rect x="24" y="106" width="40" height="52" rx="2" fill="rgba(30,30,80,0.08)" stroke="#888" stroke-width="1"/>
+      <text x="44" y="138" text-anchor="middle" font-family="Kalam,cursive" font-size="9" fill="#333">CT</text>
+      <text x="44" y="150" text-anchor="middle" font-family="Kalam,cursive" font-size="9" fill="#333">slices</text>
+      <!-- Stack effect -->
+      <rect x="21" y="103" width="52" height="64" rx="3" fill="none" stroke="#aaa" stroke-width="1" stroke-dasharray="2,1"/>
+
+      <!-- Arrow from input to L1 -->
+      <line x1="70" y1="132" x2="95" y2="132" stroke="#1a1a5e" stroke-width="2" marker-end="url(#arr)" filter="url(#wobb)"/>
+
+      <!-- ── LAYER 1 box ── -->
+      <rect x="97" y="90" width="108" height="84" rx="4" fill="rgba(255,230,180,0.6)" stroke="#1a1a5e" stroke-width="2" filter="url(#wobb)"/>
+      <text x="151" y="110" text-anchor="middle" font-family="Permanent Marker,cursive" font-size="10" fill="#c41e3a">LAYER 1</text>
+      <text x="151" y="126" text-anchor="middle" font-family="Kalam,cursive" font-size="13" fill="#1a1a5e">MedSigLIP</text>
+      <text x="151" y="140" text-anchor="middle" font-family="Kalam,cursive" font-size="10" fill="#555">-448</text>
+      <text x="151" y="155" text-anchor="middle" font-family="Kalam,cursive" font-size="9" fill="#555">zero-shot triage</text>
+      <text x="151" y="167" text-anchor="middle" font-family="Kalam,cursive" font-size="9" fill="#2d7d52">~1.2s on CPU</text>
+
+      <!-- CPU annotation -->
+      <text x="151" y="72" text-anchor="middle" font-family="Kalam,cursive" font-size="9" fill="#888" font-style="italic">runs on CPU!</text>
+      <line x1="151" y1="76" x2="151" y2="88" stroke="#aaa" stroke-width="1" stroke-dasharray="2,2" marker-end="url(#arr)"/>
+
+      <!-- Arrow L1 → L2 -->
+      <line x1="205" y1="132" x2="228" y2="132" stroke="#1a1a5e" stroke-width="2" marker-end="url(#arr)" filter="url(#wobb)"/>
+      <!-- Label -->
+      <text x="216" y="124" text-anchor="middle" font-family="Kalam,cursive" font-size="8" fill="#888">suspicious</text>
+      <text x="216" y="133" text-anchor="middle" font-family="Kalam,cursive" font-size="8" fill="#888">slices</text>
+
+      <!-- ── LAYER 2 box ── -->
+      <rect x="230" y="90" width="108" height="84" rx="4" fill="rgba(180,210,255,0.55)" stroke="#1a1a5e" stroke-width="2" filter="url(#wobb)"/>
+      <text x="284" y="110" text-anchor="middle" font-family="Permanent Marker,cursive" font-size="10" fill="#c41e3a">LAYER 2</text>
+      <text x="284" y="126" text-anchor="middle" font-family="Kalam,cursive" font-size="12" fill="#1a1a5e">MedGemma</text>
+      <text x="284" y="141" text-anchor="middle" font-family="Kalam,cursive" font-size="10" fill="#1a1a5e">1.5 4B</text>
+      <text x="284" y="155" text-anchor="middle" font-family="Kalam,cursive" font-size="9" fill="#555">multi-slice CT</text>
+      <text x="284" y="167" text-anchor="middle" font-family="Kalam,cursive" font-size="9" fill="#555">→ JSON findings</text>
+
+      <!-- 4-bit annotation -->
+      <text x="284" y="188" text-anchor="middle" font-family="Kalam,cursive" font-size="8" fill="#888">4-bit NF4 (~4GB VRAM)</text>
+
+      <!-- Arrow splits: L2 → L3 and L2 → L4 -->
+      <!-- Fork point -->
+      <line x1="338" y1="132" x2="366" y2="132" stroke="#1a1a5e" stroke-width="2" filter="url(#wobb)"/>
+      <!-- Down to L3 -->
+      <line x1="366" y1="132" x2="366" y2="215" stroke="#1a1a5e" stroke-width="2" filter="url(#wobb)"/>
+      <line x1="366" y1="215" x2="389" y2="215" stroke="#1a1a5e" stroke-width="2" marker-end="url(#arr)" filter="url(#wobb)"/>
+      <!-- Across to L4 -->
+      <line x1="366" y1="132" x2="392" y2="132" stroke="#1a1a5e" stroke-width="2" marker-end="url(#arr)" filter="url(#wobb)"/>
+
+      <!-- ── LAYER 3 box ── -->
+      <rect x="391" y="172" width="108" height="84" rx="4" fill="rgba(200,240,210,0.55)" stroke="#1a1a5e" stroke-width="2" filter="url(#wobb)"/>
+      <text x="445" y="192" text-anchor="middle" font-family="Permanent Marker,cursive" font-size="10" fill="#c41e3a">LAYER 3</text>
+      <text x="445" y="210" text-anchor="middle" font-family="Kalam,cursive" font-size="12" fill="#1a1a5e">U-Net Seg</text>
+      <text x="445" y="226" text-anchor="middle" font-family="Kalam,cursive" font-size="9" fill="#555">ResNet34</text>
+      <text x="445" y="240" text-anchor="middle" font-family="Kalam,cursive" font-size="9" fill="#555">→ volume mL</text>
+      <text x="445" y="252" text-anchor="middle" font-family="Kalam,cursive" font-size="9" fill="#2d7d52">~2s on T4</text>
+
+      <!-- ── LAYER 4 box ── -->
+      <rect x="392" y="90" width="108" height="84" rx="4" fill="rgba(230,200,255,0.55)" stroke="#1a1a5e" stroke-width="2" filter="url(#wobb)"/>
+      <text x="446" y="110" text-anchor="middle" font-family="Permanent Marker,cursive" font-size="10" fill="#c41e3a">LAYER 4</text>
+      <text x="446" y="126" text-anchor="middle" font-family="Kalam,cursive" font-size="12" fill="#1a1a5e">Report</text>
+      <text x="446" y="141" text-anchor="middle" font-family="Kalam,cursive" font-size="10" fill="#1a1a5e">Synthesis</text>
+      <text x="446" y="155" text-anchor="middle" font-family="Kalam,cursive" font-size="9" fill="#555">EAST-aligned</text>
+      <text x="446" y="167" text-anchor="middle" font-family="Kalam,cursive" font-size="9" fill="#555">LoRA adapter</text>
+
+      <!-- L3 merges up to L4→L5 arrow -->
+      <line x1="445" y1="172" x2="445" y2="174" stroke="#1a1a5e" stroke-width="1.5" stroke-dasharray="3,2"/>
+
+      <!-- Arrow L4 → L5 -->
+      <line x1="500" y1="132" x2="527" y2="132" stroke="#1a1a5e" stroke-width="2" marker-end="url(#arr)" filter="url(#wobb)"/>
+      <!-- merge note -->
+      <text x="512" y="122" text-anchor="middle" font-family="Kalam,cursive" font-size="8" fill="#888">report</text>
+      <text x="512" y="130" text-anchor="middle" font-family="Kalam,cursive" font-size="8" fill="#888">+ vol mL</text>
+
+      <!-- ── LAYER 5 box ── -->
+      <rect x="529" y="90" width="108" height="84" rx="4" fill="rgba(255,210,210,0.55)" stroke="#1a1a5e" stroke-width="2" filter="url(#wobb)"/>
+      <text x="583" y="110" text-anchor="middle" font-family="Permanent Marker,cursive" font-size="10" fill="#c41e3a">LAYER 5</text>
+      <text x="583" y="126" text-anchor="middle" font-family="Kalam,cursive" font-size="13" fill="#1a1a5e">Q&amp;A</text>
+      <text x="583" y="141" text-anchor="middle" font-family="Kalam,cursive" font-size="10" fill="#1a1a5e">SSE Stream</text>
+      <text x="583" y="155" text-anchor="middle" font-family="Kalam,cursive" font-size="9" fill="#555">~2s first token</text>
+      <text x="583" y="167" text-anchor="middle" font-family="Kalam,cursive" font-size="9" fill="#555">30-min TTL</text>
+
+      <!-- Output arrow -->
+      <line x1="637" y1="132" x2="666" y2="132" stroke="#1a1a5e" stroke-width="2" marker-end="url(#arr)" filter="url(#wobb)"/>
+
+      <!-- Output box -->
+      <rect x="668" y="110" width="62" height="44" rx="3" fill="rgba(45,125,82,0.15)" stroke="#2d7d52" stroke-width="1.5" stroke-dasharray="4,2" filter="url(#wobb)"/>
+      <text x="699" y="128" text-anchor="middle" font-family="Kalam,cursive" font-size="9" fill="#2d7d52">Structured</text>
+      <text x="699" y="140" text-anchor="middle" font-family="Kalam,cursive" font-size="9" fill="#2d7d52">Briefing</text>
+      <text x="699" y="152" text-anchor="middle" font-family="Kalam,cursive" font-size="9" fill="#2d7d52">&lt;25s</text>
+
+      <!-- Scribbled labels / annotations -->
+      <text x="44" y="88" text-anchor="middle" font-family="Kalam,cursive" font-size="10" fill="#888">uploaded</text>
+      <text x="44" y="98" text-anchor="middle" font-family="Kalam,cursive" font-size="10" fill="#888">slices</text>
+
+      <!-- Star annotation on Layer 2 -->
+      <text x="256" y="90" font-family="Permanent Marker,cursive" font-size="18" fill="#c41e3a">★</text>
+
+      <!-- Bracket showing L3 feeds into combined context -->
+      <path d="M 445 256 Q 500 275 529 210" stroke="#888" stroke-width="1.5" fill="none" stroke-dasharray="3,2" marker-end="url(#arr)"/>
+      <text x="484" y="278" text-anchor="middle" font-family="Kalam,cursive" font-size="8" fill="#888">volume mL →</text>
+      <text x="484" y="288" text-anchor="middle" font-family="Kalam,cursive" font-size="8" fill="#888">feeds report</text>
+
+      <!-- Title -->
+      <text x="370" y="32" text-anchor="middle" font-family="Permanent Marker,cursive" font-size="16" fill="#1a1a5e">5-Layer HAI-DEF Pipeline</text>
+      <line x1="170" y1="37" x2="570" y2="37" stroke="#1a1a5e" stroke-width="1.5" filter="url(#wobb)"/>
+
+      <!-- Time axis at bottom -->
+      <line x1="30" y1="310" x2="700" y2="310" stroke="#aaa" stroke-width="1.5" marker-end="url(#arr)"/>
+      <text x="30" y="325" font-family="Kalam,cursive" font-size="9" fill="#aaa">t=0s</text>
+      <text x="135" y="325" font-family="Kalam,cursive" font-size="9" fill="#aaa">t≈1s</text>
+      <text x="260" y="325" font-family="Kalam,cursive" font-size="9" fill="#aaa">t≈10s</text>
+      <text x="540" y="325" font-family="Kalam,cursive" font-size="9" fill="#aaa">t≈22s</text>
+      <text x="650" y="325" font-family="Kalam,cursive" font-size="9" fill="#2d7d52">t&lt;25s ✓</text>
+      <!-- tick lines -->
+      <line x1="151" y1="306" x2="151" y2="313" stroke="#ccc" stroke-width="1"/>
+      <line x1="284" y1="306" x2="284" y2="313" stroke="#ccc" stroke-width="1"/>
+      <line x1="583" y1="306" x2="583" y2="313" stroke="#ccc" stroke-width="1"/>
+    </svg>
+    <p class="diagram-caption">Fig 1 — hand-drawn (obviously). ★ = where the real magic happens.</p>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ── Layer 1 ── -->
+  <div class="rel">
+    <h2>Layer 1 — MedSigLIP Triage</h2>
+    <div class="margin-note" style="top:0px; left:-74px; width:68px; font-size:0.7rem;">contrastive<br>encoder!<br>not decoder</div>
+  </div>
+
+  <p>Every uploaded CT series goes here first. <span class="hl">Not every slice has hemorrhage</span> — most don't. Passing 10+ slices to MedGemma would blow context + waste GPU time.</p>
+
+  <p style="margin-top:6px;">MedSigLIP-448 (<code>google/medsiglip-448</code>) scores each slice against 5 clinically specific text candidates:</p>
+
+  <div class="code-block">LABELS = [
+  "CT scan showing intraabdominal hemorrhage or active bleeding",
+  "CT scan with liver laceration, splenic injury, or solid organ trauma",
+  "CT scan showing hemoperitoneum or free fluid in the abdomen",
+  "Normal CT scan of the abdomen without hemorrhage or injury",       ← negative
+  "CT scan with bowel perforation or mesenteric injury",
+]
+
+suspicious_score = sum(probs for positive labels)
+threshold = 0.25  → slices above this → pass to Layer 2</div>
+
+  <p><span class="hl-blue">Key safety net:</span> even if NO slices breach threshold, we still pass the top-scoring slice. Prevents false-negative silent passes.</p>
+
+  <div class="sticky blue" style="margin-top:12px;">
+    Why not vanilla CLIP?<br>
+    Tested it. General CLIP assigns nearly identical scores to hemorrhagic + normal abdominal CT — no domain knowledge of HU ranges.<br>
+    MedSigLIP → trained on medical image-text pairs → picks up the signal.
+  </div>
+
+  <p style="margin-top:10px;"><strong>Result:</strong> 8 slices → typically 2–3 suspicious → <span class="hl-green">60–80% faster MedGemma inference</span></p>
+
+  <hr class="divider">
+
+  <!-- ── Layer 2 ── -->
+  <div class="rel">
+    <h2>Layer 2 — MedGemma 1.5 4B</h2>
+    <div class="margin-note" style="top:0px; left:-74px; width:68px; font-size:0.7rem;">the ★ one<br>multi-image<br>reasoning</div>
+  </div>
+
+  <p>Real clinical reasoning happens here. Slices passed in <span class="hl">Gemma3 native multi-image format</span> — interleaved image+text tokens, not gridded/concatenated.</p>
+
+  <div class="code-block">content = []
+for i, img in enumerate(slices):
+    content.append({"type": "image", "image": img.convert("RGB")})
+    content.append({"type": "text",  "text": f"[CT Slice {i+1} of {n}]"})
+
+# Model sees each slice as DISTINCT visual input with position context
+content.append({"type": "text", "text": "Evaluate ALL slices as a single volume...
+Output ONLY valid JSON: {injury_pattern, organs_involved, ...}"})</div>
+
+  <p>Output forced to JSON. Parser uses brace-counting to extract valid JSON even when model wraps it in markdown/narrative.</p>
+
+  <h3>VRAM-Adaptive Slice Cap</h3>
+  <div class="code-block">if total_vram_gb < 20:   max_qa_slices = 3   # T4 / V100
+elif total_vram_gb < 32: max_qa_slices = 6   # A10G
+else:                    max_qa_slices = 10  # A100+</div>
+
+  <p>Detected at startup. Prevents OOM crashes gracefully instead of failing the request.</p>
+
+  <hr class="divider">
+
+  <!-- ── Layer 3 ── -->
+  <div class="rel">
+    <h2>Layer 3 — U-Net Segmentation</h2>
+    <div class="margin-note" style="top:0px; left:-74px; width:68px; font-size:0.7rem;">pixel-level<br>precision<br>≠ LLM vibes</div>
+  </div>
+
+  <p>MedGemma is great at qualitative reasoning. For hemorrhage volume in mL (a number surgeons actually use), we need pixel-level precision.</p>
+  <p>ResNet34-backbone U-Net → binary hemorrhage masks → stacked into 3D volume → converted using real CT voxel spacing:</p>
+
+  <div class="code-block">voxel_volume_ml = (spacing[0] * spacing[1] * spacing[2]) / 1000.0
+volume_ml       = num_hemorrhage_voxels * voxel_volume_ml</div>
+
+  <p>Clinical thresholds (published trauma literature):</p>
+  <ul>
+    <li><strong>&lt; 5 mL</strong> → LOW — minor bleeding, NOM appropriate</li>
+    <li><strong>5–500 mL</strong> → MODERATE — watch/monitor, possible IR</li>
+    <li><strong>&gt; 500 mL</strong> → HIGH — emergent operative management</li>
+  </ul>
+
+  <div class="sticky pink" style="float:right; margin-left:16px; margin-top:4px;">
+    "85 mL hemoperitoneum, HIGH risk."<br><br>
+    Surgeon actually understands that number.<br>
+    Not: "there appears to be a moderate amount of free fluid..."
+  </div>
+
+  <div style="clear:both;"></div>
+  <hr class="divider">
+
+  <!-- ── Layer 4 ── -->
+  <div class="rel">
+    <h2>Layer 4 — EAST Report Synthesis</h2>
+  </div>
+
+  <p>With Layer 2 findings + Layer 3 volume → MedGemma synthesizes a full structured clinical report. Format mirrors radiology attending: <span class="hl">FINDINGS → IMPRESSION → MANAGEMENT</span>.</p>
+  <p>EAST (Eastern Association for Surgery of Trauma) management thresholds baked into the prompt. LoRA adapter adds AAST organ injury grading knowledge on top of base MedGemma.</p>
+
+  <h3>LoRA Fine-Tuning</h3>
+  <p>Trained rank-16 LoRA on RSNA 2023 Abdominal Trauma Detection (3,147 labeled CT volumes). Instruction-response pairs from RSNA ground truth:</p>
+
+  <div class="code-block">response = json.dumps({
+    "injury_pattern": "Grade III liver laceration with perihepatic hematoma",
+    "organs_involved": ["liver"],
+    "bleeding_description": "Perihepatic hematoma, no active extravasation",
+    "severity_estimate": "moderate",
+    "differential_diagnosis": ["hepatic laceration", "biloma"]
+})</div>
+
+  <p>Adapter published at <code>AryanMarwah/medgemma-trauma-lora</code>. Loads via PEFT at startup, adds ~2% to model size.</p>
+
+  <hr class="divider">
+
+  <!-- ── Layer 5 ── -->
+  <div class="rel">
+    <h2>Layer 5 — Streaming Q&amp;A</h2>
+    <div class="margin-note" style="top:0px; left:-74px; width:68px; font-size:0.7rem;">SSE magic<br>first token<br>in ~2s</div>
+  </div>
+
+  <p>After the pipeline, the trauma team can ask follow-ups: <em>"Is there active extravasation?"</em>, <em>"Grade the liver injury."</em>, <em>"OR or IR?"</em></p>
+  <p>Token-by-token streaming via <span class="hl">Server-Sent Events</span>:</p>
+
+  <div class="code-block">streamer = TextIteratorStreamer(tokenizer, skip_special_tokens=True)
+thread   = threading.Thread(target=lambda: model.generate(**gen_kwargs))
+thread.start()
+
+for token in streamer:
+    yield token       # Flask SSE → browser renders live</div>
+
+  <p>Session stored server-side under UUID with 30-min TTL. Q&A picks up context without re-running the pipeline.</p>
+
+  <hr class="divider">
+
+  <!-- ── Performance Table ── -->
+  <div class="rel">
+    <h2>Performance Numbers</h2>
+    <div class="margin-note" style="top:0px; left:-74px; width:68px; font-size:0.7rem;">T4 = free<br>tier on<br>Colab!</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Stage</th>
+        <th>Hardware</th>
+        <th>Latency</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>MedSigLIP triage (8 slices)</td>
+        <td>CPU</td>
+        <td>~1.2s</td>
+      </tr>
+      <tr>
+        <td>MedGemma visual analysis (3 slices, 4-bit)</td>
+        <td>T4</td>
+        <td>~8–12s</td>
+      </tr>
+      <tr>
+        <td>U-Net segmentation (8 slices)</td>
+        <td>T4</td>
+        <td>~2s</td>
+      </tr>
+      <tr>
+        <td>Report synthesis</td>
+        <td>T4</td>
+        <td>~6s</td>
+      </tr>
+      <tr>
+        <td><strong>Total pipeline</strong></td>
+        <td><strong>T4</strong></td>
+        <td><strong style="color:#2d7d52;">&lt; 25s ✓</strong></td>
+      </tr>
+      <tr>
+        <td>Q&amp;A first token</td>
+        <td>T4</td>
+        <td>~2s</td>
+      </tr>
+      <tr>
+        <td><em>Human pipeline (CT→decision)</em></td>
+        <td><em>—</em></td>
+        <td><em style="color:#c41e3a;">20–45 min</em></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr class="divider">
+
+  <!-- ── Orchestrator ── -->
+  <div class="rel">
+    <h2>Orchestrator Design</h2>
+  </div>
+
+  <p>Single <code>TraumaOrchestrator</code> class — loads all models once at Flask startup, holds in memory.</p>
+
+  <div class="code-block">class TraumaOrchestrator:
+    def __init__(self):
+        self.triager            = MedSigLIPTriager(device="cpu")
+        self.visual_analyzer    = MedGemmaVisualAnalyzer(device="auto", use_4bit=True)
+        self.segmenter          = PreTrainedSegmenter(encoder="resnet34")
+        self.report_synthesizer = ReportSynthesizer(self.visual_analyzer)
+        self._sessions          = {}   # UUID → session context (30-min TTL)</div>
+
+  <p>Key decisions:</p>
+  <ul>
+    <li>MedSigLIP on CPU, MedGemma on GPU — 850M params fast enough on CPU, frees full GPU budget</li>
+    <li>Session store with TTL — Q&A doesn't re-run the pipeline, just loads context</li>
+    <li>OOM recovery — catches <code>torch.cuda.OutOfMemoryError</code>, clears cache, falls back to single slice</li>
+  </ul>
+
+  <hr class="divider">
+
+  <!-- ── Stack ── -->
+  <div class="rel">
+    <h2>Stack</h2>
+  </div>
+
+  <ul>
+    <li><strong>Backend:</strong> Flask + Server-Sent Events</li>
+    <li><strong>ML:</strong> HuggingFace Transformers, BitsAndBytes, PEFT, segmentation_models_pytorch</li>
+    <li><strong>Frontend:</strong> Vanilla JS, Inter + JetBrains Mono, glassmorphism dark UI</li>
+    <li><strong>Deploy:</strong> HuggingFace Spaces (Dockerfile, T4 GPU)</li>
+    <li><strong>Fine-tuning:</strong> TRL SFTTrainer on RSNA 2023 Abdominal Trauma Detection</li>
+    <li><strong>Models:</strong> <code>google/medgemma-1.5-4b-it</code>, <code>google/medsiglip-448</code></li>
+    <li><strong>LoRA:</strong> <code>AryanMarwah/medgemma-trauma-lora</code></li>
+  </ul>
+
+  <hr class="divider">
+
+  <!-- ── What's Next ── -->
+  <div class="rel">
+    <h2>What's Next?</h2>
+    <div class="margin-note" style="top:0px; left:-74px; width:68px; font-size:0.7rem;">the real<br>work ↓</div>
+  </div>
+
+  <ul>
+    <li><strong>Active extravasation detection</strong> — arterial vs. contained hematoma → highest-value next layer</li>
+    <li><strong>Multi-phase CT reasoning</strong> — arterial + portal venous phases, enhancement pattern comparison</li>
+    <li><strong>FHIR integration</strong> — map to DiagnosticReport for direct EHR compatibility</li>
+    <li><strong>Prospective validation</strong> — sensitivity/specificity vs. radiologist ground truth on de-identified data. <em>That's the real work.</em></li>
+  </ul>
+
+  <div class="sticky" style="margin-top:20px; max-width:280px;">
+    This is a research prototype.<br>
+    Clinical deployment needs:<br>
+    ✓ Prospective validation<br>
+    ✓ IRB approval<br>
+    ✓ FDA 510(k) / De Novo pathway<br>
+    ← Do not skip these steps.
+  </div>
+
+  <!-- ── Footer ── -->
+  <div style="clear:both; margin-top:60px;"></div>
+  <div class="footer">
+    Built by Aryan Marwah — HAI-DEF MedGemma Hackathon — Feb 2026<br>
+    <span>All models open-weight. No patient data used.</span>
+  </div>
+
+</div><!-- .page -->
+
+<script>
+// ── Generate spiral binding rings ──
+(function() {
+  const canvas = document.getElementById('rings-canvas');
+  const page   = document.getElementById('page');
+  canvas.width  = 88;
+  canvas.height = page.offsetHeight;
+  const ctx     = canvas.getContext('2d');
+
+  const spacing = 56;
+  const startY  = 60;
+  const count   = Math.floor((canvas.height - startY) / spacing) + 1;
+  const cx      = 44;
+  const ry      = 10;
+  const rx      = 13;
+
+  for (let i = 0; i < count; i++) {
+    const cy = startY + i * spacing;
+
+    // Shadow/depth
+    ctx.beginPath();
+    ctx.ellipse(cx + 1, cy + 2, rx, ry, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+    ctx.lineWidth   = 3;
+    ctx.stroke();
+
+    // Main ring
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = '#8a9bb0';
+    ctx.lineWidth   = 2.5;
+    ctx.stroke();
+
+    // Inner highlight
+    ctx.beginPath();
+    ctx.ellipse(cx - 1, cy - 1, rx * 0.55, ry * 0.55, -0.3, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+    ctx.lineWidth   = 1;
+    ctx.stroke();
+
+    // Punch hole shadow
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx * 0.28, ry * 0.28, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.fill();
+  }
+})();
+
+// ── Resize canvas if page height changes ──
+window.addEventListener('resize', () => {
+  const canvas = document.getElementById('rings-canvas');
+  const page   = document.getElementById('page');
+  canvas.height = page.offsetHeight;
+  // Trigger redraw by dispatching a custom event
+  canvas.dispatchEvent(new Event('resize'));
+});
+</script>
+
+</body>
+</html>
