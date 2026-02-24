@@ -1,115 +1,205 @@
 /**
- * MedGemma Trauma Analysis - Main Logic
- * Handles file uploads, vital signs, results rendering, and Q&A streaming.
+ * MedGemma Trauma Analysis — Research Dashboard UI
+ *
+ * Key changes from previous version:
+ *  - File selection stages files + shows count badge; Analyze button triggers analysis
+ *  - alert() replaced with inline dismissable error banner
+ *  - Loading overlay cycles through 5 step indicators
+ *  - Risk banner rendered from result data (HIGH / MODERATE / LOW)
+ *  - Copy-to-clipboard button on clinical report
+ *  - Typing indicator shown during Q&A streaming
  */
 
- document.addEventListener('DOMContentLoaded', () => {
-    // State
+document.addEventListener('DOMContentLoaded', () => {
+
+    // ── State ──────────────────────────────────────────────────────────
     let currentSessionId = null;
-    let qaStreaming = false;
+    let qaStreaming      = false;
+    let stagedFiles      = null;
 
-    // DOM Elements
-    const elements = {
-        fileInput: document.getElementById('fileInput'),
-        uploadZone: document.getElementById('uploadZone'),
-        vitalsToggle: document.getElementById('vitalsToggle'),
-        vitalsPanel: document.getElementById('vitalsPanel'),
-        loadingOverlay: document.getElementById('loadingOverlay'),
+    // ── DOM references ─────────────────────────────────────────────────
+    const el = {
+        fileInput:        document.getElementById('fileInput'),
+        dropTarget:       document.getElementById('dropTarget'),
+        fileCountBadge:   document.getElementById('fileCountBadge'),
+        fileValidation:   document.getElementById('fileValidation'),
+        analyzeBtn:       document.getElementById('analyzeBtn'),
+        analyzeHint:      document.getElementById('analyzeHint'),
+
+        vitHR:            document.getElementById('vitHR'),
+        vitBP:            document.getElementById('vitBP'),
+        vitGCS:           document.getElementById('vitGCS'),
+
+        loadingOverlay:   document.getElementById('loadingOverlay'),
+
+        errorBanner:      document.getElementById('errorBanner'),
+        errorMessage:     document.getElementById('errorMessage'),
+        errorDismiss:     document.getElementById('errorDismiss'),
+
         resultsContainer: document.getElementById('resultsContainer'),
-        
-        // Inputs
-        vitHR: document.getElementById('vitHR'),
-        vitBP: document.getElementById('vitBP'),
-        vitGCS: document.getElementById('vitGCS'),
-
-        // Results
         patientIdDisplay: document.getElementById('patientIdDisplay'),
-        triageBadges: document.getElementById('triageBadges'),
-        volume: document.getElementById('volume'),
-        risk: document.getElementById('risk'),
-        pixels: document.getElementById('pixels'),
-        severity: document.getElementById('severity'),
-        organs: document.getElementById('organs'),
-        injuryPattern: document.getElementById('injuryPattern'),
-        diffList: document.getElementById('diffList'),
-        recommendation: document.getElementById('recommendation'),
-        llmReport: document.getElementById('llmReport'),
-        
-        // Chat
-        chatContainer: document.getElementById('chatContainer'),
-        chatHistory: document.getElementById('chatHistory'),
-        qaInput: document.getElementById('qaInput'),
-        qaSubmit: document.getElementById('qaSubmit'),
-        resetBtn: document.getElementById('resetBtn')
+
+        riskBanner:       document.getElementById('riskBanner'),
+        riskValue:        document.getElementById('riskValue'),
+        riskVolume:       document.getElementById('riskVolume'),
+        riskEAST:         document.getElementById('riskEAST'),
+
+        triageRows:       document.getElementById('triageRows'),
+        volume:           document.getElementById('volume'),
+        pixels:           document.getElementById('pixels'),
+        severity:         document.getElementById('severity'),
+        organs:           document.getElementById('organs'),
+        injuryPattern:    document.getElementById('injuryPattern'),
+        diffList:         document.getElementById('diffList'),
+        llmReport:        document.getElementById('llmReport'),
+        copyReportBtn:    document.getElementById('copyReportBtn'),
+
+        chatHistory:      document.getElementById('chatHistory'),
+        typingIndicator:  document.getElementById('typingIndicator'),
+        qaInput:          document.getElementById('qaInput'),
+        qaSubmit:         document.getElementById('qaSubmit'),
+        resetBtn:         document.getElementById('resetBtn'),
     };
 
-    // --- Event Listeners ---
 
-    // File Upload
-    elements.fileInput.addEventListener('change', async (e) => {
-        const files = e.target.files;
-        if (files && files.length > 0) await runAnalysis(files);
+    // ═══════════════════════════════════════════════════════════════════
+    // FILE STAGING
+    // ═══════════════════════════════════════════════════════════════════
+
+    el.fileInput.addEventListener('change', (e) => stageFiles(e.target.files));
+
+    // Drag & drop
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt =>
+        el.dropTarget.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); }, false)
+    );
+
+    el.dropTarget.addEventListener('dragover',  () => el.dropTarget.classList.add('dragover'));
+    el.dropTarget.addEventListener('dragleave', () => el.dropTarget.classList.remove('dragover'));
+    el.dropTarget.addEventListener('drop', (e) => {
+        el.dropTarget.classList.remove('dragover');
+        stageFiles(e.dataTransfer.files);
     });
 
-    // Drag & Drop
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        elements.uploadZone.addEventListener(eventName, preventDefaults, false);
-    });
+    function stageFiles(files) {
+        if (!files || files.length === 0) return;
 
-    function preventDefaults(e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
+        const valid   = Array.from(files).filter(f => f.type.startsWith('image/'));
+        const invalid = files.length - valid.length;
 
-    elements.uploadZone.addEventListener('dragover', () => elements.uploadZone.classList.add('dragover'));
-    elements.uploadZone.addEventListener('dragleave', () => elements.uploadZone.classList.remove('dragover'));
-    elements.uploadZone.addEventListener('drop', async (e) => {
-        elements.uploadZone.classList.remove('dragover');
-        const files = e.dataTransfer.files;
-        if (files.length > 0) await runAnalysis(files);
-    });
-
-    // Vitals Toggle
-    elements.vitalsToggle.addEventListener('click', () => {
-        elements.vitalsPanel.classList.toggle('open');
-        const isOpen = elements.vitalsPanel.classList.contains('open');
-        elements.vitalsToggle.innerHTML = isOpen 
-            ? '<i class="fas fa-minus"></i> Hide Vitals' 
-            : '<i class="fas fa-plus"></i> Add Patient Vitals';
-    });
-
-    // Q&A
-    elements.qaSubmit.addEventListener('click', submitQuestion);
-    elements.qaInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            submitQuestion();
+        if (invalid > 0) {
+            showValidation(`${invalid} unsupported file(s) skipped — PNG/JPG only`);
+        } else {
+            hideValidation();
         }
-    });
 
-    // Reset
-    if(elements.resetBtn) {
-        elements.resetBtn.addEventListener('click', resetApp);
+        if (valid.length === 0) {
+            el.analyzeBtn.disabled = true;
+            el.analyzeHint.textContent = 'No valid image files selected';
+            return;
+        }
+
+        stagedFiles = valid;
+
+        const n = valid.length;
+        el.fileCountBadge.textContent = `${n} file${n !== 1 ? 's' : ''} staged`;
+        el.fileCountBadge.classList.remove('hidden');
+
+        el.analyzeBtn.disabled = false;
+        el.analyzeHint.textContent = `${n} CT slice${n !== 1 ? 's' : ''} ready`;
     }
 
-    // --- Core Functions ---
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ERROR / VALIDATION BANNERS
+    // ═══════════════════════════════════════════════════════════════════
+
+    function showError(msg) {
+        el.errorMessage.textContent = msg;
+        el.errorBanner.classList.remove('hidden');
+        el.errorBanner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function hideError() {
+        el.errorBanner.classList.add('hidden');
+    }
+
+    el.errorDismiss.addEventListener('click', hideError);
+
+    function showValidation(msg) {
+        el.fileValidation.textContent = msg;
+        el.fileValidation.classList.remove('hidden');
+    }
+
+    function hideValidation() {
+        el.fileValidation.classList.add('hidden');
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    // LOADING STEP INDICATOR
+    // ═══════════════════════════════════════════════════════════════════
+
+    const STEP_IDS = ['step1', 'step2', 'step3', 'step4', 'step5'];
+    let stepTimer    = null;
+    let currentStep  = 0;
+
+    function startLoadingSteps() {
+        currentStep = 0;
+        STEP_IDS.forEach(id => {
+            const s = document.getElementById(id);
+            if (s) s.className = 'step';
+        });
+        const first = document.getElementById(STEP_IDS[0]);
+        if (first) first.classList.add('active');
+
+        stepTimer = setInterval(() => {
+            if (currentStep < STEP_IDS.length - 1) {
+                const prev = document.getElementById(STEP_IDS[currentStep]);
+                if (prev) prev.className = 'step done';
+                currentStep++;
+                const next = document.getElementById(STEP_IDS[currentStep]);
+                if (next) next.classList.add('active');
+            }
+        }, 3500);
+    }
+
+    function stopLoadingSteps() {
+        clearInterval(stepTimer);
+        STEP_IDS.forEach(id => {
+            const s = document.getElementById(id);
+            if (s) s.className = 'step done';
+        });
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CORE ANALYSIS
+    // ═══════════════════════════════════════════════════════════════════
+
+    el.analyzeBtn.addEventListener('click', async () => {
+        if (!stagedFiles || stagedFiles.length === 0) return;
+        hideError();
+        await runAnalysis(stagedFiles);
+    });
 
     async function runAnalysis(files) {
-        // Show loading
-        elements.loadingOverlay.classList.add('active');
-        elements.resultsContainer.style.display = 'none';
+        el.loadingOverlay.classList.add('active');
+        el.resultsContainer.classList.add('hidden');
+        startLoadingSteps();
 
         const formData = new FormData();
-        Array.from(files).forEach(f => formData.append('files', f));
+        files.forEach(f => formData.append('files', f));
 
-        // Add optional vitals
-        if (elements.vitHR.value) formData.append('hr', elements.vitHR.value.trim());
-        if (elements.vitBP.value) formData.append('bp', elements.vitBP.value.trim());
-        if (elements.vitGCS.value) formData.append('gcs', elements.vitGCS.value.trim());
+        if (el.vitHR.value.trim())  formData.append('hr',  el.vitHR.value.trim());
+        if (el.vitBP.value.trim())  formData.append('bp',  el.vitBP.value.trim());
+        if (el.vitGCS.value.trim()) formData.append('gcs', el.vitGCS.value.trim());
 
         try {
-            const response = await fetch('/upload', { method: 'POST', body: formData });
-            const data = await response.json();
+            const resp = await fetch('/upload', { method: 'POST', body: formData });
+            const data = await resp.json();
+
+            stopLoadingSteps();
+            el.loadingOverlay.classList.remove('active');
 
             if (data.success) {
                 renderResults(data.result);
@@ -117,169 +207,218 @@
                 throw new Error(data.error || 'Unknown error occurred');
             }
         } catch (err) {
-            alert(`Error: ${err.message}`);
-            elements.loadingOverlay.classList.remove('active');
+            stopLoadingSteps();
+            el.loadingOverlay.classList.remove('active');
+            showError(`Analysis failed: ${err.message}`);
         }
     }
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    // RENDER RESULTS
+    // ═══════════════════════════════════════════════════════════════════
 
     function renderResults(result) {
         currentSessionId = result.session_id;
 
-        // Hide upload, show results
-        elements.loadingOverlay.classList.remove('active');
-        elements.resultsContainer.style.display = 'block';
-        
-        // Scroll to results
-        elements.resultsContainer.scrollIntoView({ behavior: 'smooth' });
+        el.resultsContainer.classList.remove('hidden');
+        el.resultsContainer.scrollIntoView({ behavior: 'smooth' });
 
-        // Populate Data
-        elements.patientIdDisplay.textContent = result.patient_id || 'Unknown';
+        // Patient ID
+        el.patientIdDisplay.textContent = result.patient_id || 'CASE-UNKNOWN';
 
-        // Triage
-        elements.triageBadges.innerHTML = '';
-        const scores = result.triage.per_slice_scores || [];
+        // ── Risk Banner ──────────────────────────────────────────────
+        const quant      = result.quantification || {};
+        const riskLevel  = (quant.risk_level || 'UNKNOWN').toUpperCase();
+        const volumeML   = (quant.volume_ml || 0).toFixed(1);
+        const recommendation = quant.recommendation || '--';
+
+        el.riskBanner.className = `risk-banner ${riskLevel.toLowerCase()}`;
+        el.riskValue.textContent  = riskLevel;
+        el.riskVolume.textContent = `Hemorrhage: ${volumeML} mL`;
+        el.riskEAST.textContent   = `EAST: ${recommendation}`;
+
+        // ── Triage bar rows ──────────────────────────────────────────
+        el.triageRows.innerHTML = '';
+        const scores = result.triage?.per_slice_scores || [];
         scores.forEach((score, i) => {
-            const badge = document.createElement('span');
-            const pct = Math.round(score * 100);
-            const isSuspicious = score >= 0.25;
-            badge.className = `badge ${isSuspicious ? 'bg-danger text-white' : 'bg-success text-white'}`;
-            // Custom styling handled by CSS classes or inline solely for specific status logic
-            badge.style.backgroundColor = isSuspicious ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)';
-            badge.style.color = isSuspicious ? '#ef4444' : '#10b981';
-            badge.style.border = `1px solid ${isSuspicious ? '#ef4444' : '#10b981'}`;
-            badge.style.marginRight = '8px';
-            badge.textContent = `Slice ${i + 1}: ${pct}%`;
-            elements.triageBadges.appendChild(badge);
+            const pct        = Math.round(score * 100);
+            const suspicious = score >= 0.25;
+            const cls        = suspicious ? 'suspicious' : 'clear';
+            const label      = suspicious ? 'Suspicious' : 'Clear';
+
+            const row = document.createElement('div');
+            row.className = 'triage-row';
+            row.innerHTML = `
+                <span class="triage-slice-label">SL-${String(i + 1).padStart(2, '0')}</span>
+                <div class="triage-bar-bg">
+                    <div class="triage-bar-fill ${cls}" style="width:${pct}%"></div>
+                </div>
+                <span class="triage-status ${cls}">${label}</span>
+            `;
+            el.triageRows.appendChild(row);
         });
 
-        // Quantification
-        const quant = result.quantification || {};
-        elements.volume.textContent = (quant.volume_ml || 0).toFixed(2) + ' mL';
-        elements.pixels.textContent = (quant.num_voxels || 0).toLocaleString();
-        
-        const riskLevel = (quant.risk_level || 'UNKNOWN').toUpperCase();
-        elements.risk.textContent = riskLevel;
-        
-        // Risk Coloring
-        elements.risk.className = 'stat-value'; // reset
-        if (riskLevel === 'HIGH') elements.risk.classList.add('text-danger');
-        else if (riskLevel === 'MODERATE') elements.risk.classList.add('text-warning');
-        else elements.risk.classList.add('text-success');
+        // ── Quantification ───────────────────────────────────────────
+        el.volume.textContent = `${volumeML} mL`;
+        el.pixels.textContent = (quant.num_voxels || 0).toLocaleString();
 
-        // Visual Findings
+        // ── Visual Findings ──────────────────────────────────────────
         const vf = result.visual_findings || {};
-        elements.severity.textContent = (vf.severity_estimate || '--').toUpperCase();
-        
+        el.severity.textContent     = (vf.severity_estimate || '--').toUpperCase();
         const organs = vf.organs_involved || [];
-        elements.organs.textContent = organs.length ? organs.join(', ') : 'None identified';
-        elements.injuryPattern.textContent = vf.injury_pattern || '--';
+        el.organs.textContent       = organs.length ? organs.join(', ') : 'None identified';
+        el.injuryPattern.textContent = vf.injury_pattern || '--';
 
-        // Differential Diagnosis
-        elements.diffList.innerHTML = '';
+        // ── Differential Diagnosis ───────────────────────────────────
+        el.diffList.innerHTML = '';
         const diffs = vf.differential_diagnosis || [];
         if (diffs.length) {
             diffs.forEach(d => {
                 const li = document.createElement('li');
                 li.textContent = d;
-                li.style.marginBottom = '6px';
-                li.innerHTML = `<span style="color:var(--primary); margin-right:8px;">•</span>${d}`;
-                elements.diffList.appendChild(li);
+                el.diffList.appendChild(li);
             });
         } else {
-            elements.diffList.innerHTML = '<li class="text-neutral">No differential diagnosis available.</li>';
+            const li = document.createElement('li');
+            li.textContent = 'No differential diagnosis available.';
+            el.diffList.appendChild(li);
         }
 
-        // Recommendation
-        elements.recommendation.textContent = quant.recommendation || 'See full report below.';
+        // ── Clinical Report ──────────────────────────────────────────
+        el.llmReport.textContent = result.report || '--';
 
-        // Report
-        elements.llmReport.textContent = result.report || '--';
-
-        // Reset Chat
-        elements.chatHistory.innerHTML = '';
+        // ── Reset Chat ───────────────────────────────────────────────
+        el.chatHistory.innerHTML = `
+            <div class="message ai">
+                <div class="msg-role">MedGemma</div>
+                <div class="msg-text">Scan analyzed. Ask me anything about the findings or treatment options.</div>
+            </div>
+        `;
     }
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    // COPY REPORT
+    // ═══════════════════════════════════════════════════════════════════
+
+    el.copyReportBtn.addEventListener('click', async () => {
+        const text = el.llmReport.textContent;
+        try {
+            await navigator.clipboard.writeText(text);
+            el.copyReportBtn.innerHTML = '<i class="fas fa-check"></i> Copied';
+            el.copyReportBtn.classList.add('copied');
+            setTimeout(() => {
+                el.copyReportBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+                el.copyReportBtn.classList.remove('copied');
+            }, 2000);
+        } catch {
+            showError('Clipboard write blocked — please select and copy the report text manually.');
+        }
+    });
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Q&A STREAMING
+    // ═══════════════════════════════════════════════════════════════════
+
+    el.qaSubmit.addEventListener('click', submitQuestion);
+    el.qaInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitQuestion(); }
+    });
 
     function submitQuestion() {
         if (qaStreaming) return;
-        
-        const q = elements.qaInput.value.trim();
+
+        const q = el.qaInput.value.trim();
         if (!q) return;
-        
+
         if (!currentSessionId) {
-             alert('Please upload and analyze a scan first.');
-             return;
+            showError('Please analyze a scan first before asking questions.');
+            return;
         }
 
-        // Add User Message
         appendMessage('You', q, 'user');
-        elements.qaInput.value = '';
+        el.qaInput.value = '';
 
-        // Add Placeholder AI Message
-        const aiMsgTextEl = appendMessage('MedGemma', '', 'ai');
-        
-        elements.qaSubmit.disabled = true;
+        const aiTextEl = appendMessage('MedGemma', '', 'ai');
+        el.qaSubmit.disabled = true;
+        el.typingIndicator.classList.remove('hidden');
         qaStreaming = true;
 
-        // Stream Response
         const url = `/qa-stream?session_id=${encodeURIComponent(currentSessionId)}&q=${encodeURIComponent(q)}`;
         const evtSource = new EventSource(url);
 
         evtSource.onmessage = (e) => {
             if (e.data === '[DONE]') {
                 evtSource.close();
-                elements.qaSubmit.disabled = false;
+                el.qaSubmit.disabled = false;
+                el.typingIndicator.classList.add('hidden');
                 qaStreaming = false;
                 return;
             }
-            aiMsgTextEl.textContent += e.data;
-            scrollToBottom();
+            el.typingIndicator.classList.add('hidden');
+            aiTextEl.textContent += e.data;
+            scrollChatToBottom();
         };
 
         evtSource.onerror = () => {
             evtSource.close();
-            elements.qaSubmit.disabled = false;
+            el.qaSubmit.disabled = false;
+            el.typingIndicator.classList.add('hidden');
             qaStreaming = false;
-            aiMsgTextEl.textContent += " [Connection Error]";
+            aiTextEl.textContent += ' [Connection Error]';
         };
     }
 
     function appendMessage(role, text, type) {
         const msgDiv = document.createElement('div');
         msgDiv.className = `message ${type}`;
-        
+
         const roleDiv = document.createElement('div');
-        roleDiv.style.fontWeight = 'bold';
-        roleDiv.style.fontSize = '0.75rem';
-        roleDiv.style.marginBottom = '4px';
-        roleDiv.style.opacity = '0.7';
+        roleDiv.className = 'msg-role';
         roleDiv.textContent = role;
-        
+
         const textDiv = document.createElement('div');
+        textDiv.className = 'msg-text';
         textDiv.textContent = text;
-        
+
         msgDiv.appendChild(roleDiv);
         msgDiv.appendChild(textDiv);
-        
-        elements.chatHistory.appendChild(msgDiv);
-        scrollToBottom();
-        
+        el.chatHistory.appendChild(msgDiv);
+        scrollChatToBottom();
+
         return textDiv;
     }
 
-    function scrollToBottom() {
-        elements.chatHistory.scrollTop = elements.chatHistory.scrollHeight;
+    function scrollChatToBottom() {
+        el.chatHistory.scrollTop = el.chatHistory.scrollHeight;
     }
 
+
+    // ═══════════════════════════════════════════════════════════════════
+    // RESET
+    // ═══════════════════════════════════════════════════════════════════
+
+    el.resetBtn.addEventListener('click', resetApp);
+
     function resetApp() {
-        elements.fileInput.value = '';
-        currentSessionId = null;
-        elements.resultsContainer.style.display = 'none';
-        
-        // Reset inputs
-        elements.vitHR.value = '';
-        elements.vitBP.value = '';
-        elements.vitGCS.value = '';
-        
+        el.fileInput.value    = '';
+        stagedFiles           = null;
+        currentSessionId      = null;
+
+        el.fileCountBadge.classList.add('hidden');
+        el.analyzeBtn.disabled         = true;
+        el.analyzeHint.textContent     = 'Select files to begin';
+
+        el.vitHR.value  = '';
+        el.vitBP.value  = '';
+        el.vitGCS.value = '';
+
+        el.resultsContainer.classList.add('hidden');
+        hideError();
+        hideValidation();
+
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 });
