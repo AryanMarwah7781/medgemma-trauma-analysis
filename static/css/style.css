@@ -1,29 +1,29 @@
 /*
  * MedGemma Trauma Analysis — Research Dashboard Theme
- * Aesthetic: Deep navy, IBM Plex Mono, DM Serif Display headers,
+ * Aesthetic: Slate + warm cream, IBM Plex Mono, DM Serif Display headers,
  *            clinical alert colors, horizontal-rule section dividers.
  */
 
 :root {
     /* Backgrounds */
-    --bg:            #0a0f1e;
-    --bg-panel:      #0d1426;
-    --bg-panel-alt:  #111827;
+    --bg:            #18222f;
+    --bg-panel:      #1f2d3d;
+    --bg-panel-alt:  #243344;
 
     /* Accent / text */
-    --accent:        #4a7fa5;
-    --text-main:     #e8edf5;
-    --text-muted:    #6b7fa3;
-    --text-dim:      #3d4f6e;
-    --rule:          rgba(255, 255, 255, 0.07);
+    --accent:        #6a9fbf;
+    --text-main:     #f0e9d6;
+    --text-muted:    #8fa3b0;
+    --text-dim:      #4d6070;
+    --rule:          rgba(240, 233, 214, 0.10);
 
     /* Clinical risk colors */
-    --risk-high:         #c0392b;
-    --risk-high-bg:      rgba(192, 57, 43, 0.14);
-    --risk-moderate:     #d48c2a;
-    --risk-moderate-bg:  rgba(212, 140, 42, 0.14);
-    --risk-low:          #2d7d5a;
-    --risk-low-bg:       rgba(45, 125, 90, 0.14);
+    --risk-high:         #d95f5f;
+    --risk-high-bg:      rgba(217, 95, 95, 0.14);
+    --risk-moderate:     #d4963a;
+    --risk-moderate-bg:  rgba(212, 150, 58, 0.14);
+    --risk-low:          #4a9e72;
+    --risk-low-bg:       rgba(74, 158, 114, 0.14);
 
     /* Spacing scale */
     --sp-xs: 4px;
@@ -358,7 +358,7 @@ input[type="file"] { display: none; }
 .loading-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(10, 15, 30, 0.96);
+    background: rgba(24, 34, 47, 0.97);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -705,7 +705,7 @@ input[type="file"] { display: none; }
     font-family: 'IBM Plex Mono', monospace;
     font-size: 0.8rem;
     line-height: 1.75;
-    color: #c5cfe0;
+    color: #ddd5c0;
     max-height: 440px;
     overflow-y: auto;
     white-space: pre-wrap;
